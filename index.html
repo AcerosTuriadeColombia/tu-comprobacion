@@ -60,12 +60,13 @@ const CENTROS = ['Planta Amagá','Planta Malambo','Comercial'];
 const TOPES = {}; // vacío hasta recibir la política de inventario
 
 const seed = {
+  /* Usuarios de ejemplo. En uso real, contabilidad da de alta a todos y define quién autoriza a quién. */
   usuarios: [
-    {id:'u1', nombre:'Mauricio Lopera', rol:'autorizador', puesto:'Gerente comercial', autoriza:null, pago:'tarjeta', centro:'Comercial', credito:6000000, password:'demo'},
-    {id:'u2', nombre:'Vendedor Demo', rol:'vendedor', puesto:'Vendedor', autoriza:'u1', pago:'tarjeta', centro:'Comercial', credito:4000000, password:'demo'},
-    {id:'u3', nombre:'Líder Demo', rol:'lider', puesto:'Líder comercial', autoriza:'dueno', pago:'anticipo', centro:'Comercial', credito:0, password:'demo'},
     {id:'c1', nombre:'Contabilidad', rol:'contabilidad', puesto:'Contador', autoriza:null, pago:null, centro:null, credito:0, password:'demo'},
     {id:'a1', nombre:'Administrador', rol:'admin', puesto:'Administración', autoriza:null, pago:null, centro:null, credito:0, password:'demo'},
+    {id:'u1', nombre:'Autorizador Demo', rol:'autorizador', puesto:'Autorizador', autoriza:null, pago:null, centro:'Comercial', credito:0, password:'demo'},
+    {id:'u3', nombre:'Líder Demo', rol:'lider', puesto:'Líder comercial', autoriza:'u1', pago:'anticipo', centro:'Comercial', credito:0, password:'demo'},
+    {id:'u2', nombre:'Vendedor Demo', rol:'vendedor', puesto:'Vendedor', autoriza:'u3', pago:'tarjeta', centro:'Comercial', credito:4000000, password:'demo'},
   ],
   gastos: [
     {id:'g1', userId:'u2', periodo:'2026-11', fecha:'2026-11-03', concepto:'comida_cliente', valor:184000, centro:'Comercial', empresa:'HomeCenter', personas:'Compras', cliente:true, nPersonas:3, medio:'tarjeta', estado:'borrador', comentario:'', foto:true},
@@ -76,8 +77,10 @@ const seed = {
   sesion: null,
 };
 
-function load() { const s = localStorage.getItem('tuc'); return s ? JSON.parse(s) : structuredClone(seed); }
-function save() { localStorage.setItem('tuc', JSON.stringify(db)); }
+const ROLES = {vendedor:'Vendedor', lider:'Líder', autorizador:'Autorizador', contabilidad:'Contabilidad', admin:'Administrador'};
+const KEY = 'tuc2';
+function load() { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : structuredClone(seed); }
+function save() { localStorage.setItem(KEY, JSON.stringify(db)); }
 let db = load();
 let vista = 'inicio';
 const $ = s => document.querySelector(s);
@@ -90,6 +93,8 @@ const yo = () => usuario(db.sesion);
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),2200); }
 
 function puedeComprobar(u){ return ['vendedor','lider'].includes(u.rol); }
+function autorizaA(u){ return db.usuarios.filter(x=>x.autoriza===u.id); }
+function puedeAutorizar(u){ return ['lider','autorizador','admin'].includes(u.rol); }
 function gastosPeriodo(userId, periodo){ return db.gastos.filter(g=>g.userId===userId && g.periodo===periodo); }
 function periodoEstado(userId, periodo){
   const p = db.periodos.find(x=>x.userId===userId && x.periodo===periodo);
@@ -105,9 +110,9 @@ function renderNav(){
   if(!u){ $('#nav').innerHTML=''; return; }
   let items = [['inicio','Inicio']];
   if(puedeComprobar(u)) items.push(['gastos','Mis gastos'],['enviar','Enviar periodo']);
-  if(u.rol==='lider' || u.rol==='autorizador') items.push(['autorizar','Autorizar']);
-  if(u.rol==='contabilidad') items.push(['contab','Contabilidad']);
-  if(u.rol==='admin') items.push(['usuarios','Usuarios'],['dashboard','Dashboard']);
+  if(autorizaA(u).length) items.push(['autorizar','Autorizar']);
+  if(u.rol==='contabilidad') items.push(['contab','Contabilidad'],['usuarios','Usuarios']);
+  if(u.rol==='admin') items.push(['dashboard','Dashboard']);
   items.push(['salir','Salir']);
   $('#nav').innerHTML = items.map(([k,l])=>`<button class="${vista===k?'on':''}" onclick="ir('${k}')">${l}</button>`).join('');
 }
@@ -125,13 +130,17 @@ function login(){
   $('#app').innerHTML = `
   <div class="card" style="max-width:380px;margin:40px auto">
     <h2>Ingresar</h2>
-    <label>Usuario</label><select id="lu">${db.usuarios.map(u=>`<option value="${u.id}">${u.nombre} (${u.rol})</option>`).join('')}</select>
+    <label>Usuario</label><select id="lu">${db.usuarios.filter(u=>u.activo!==false).map(u=>`<option value="${u.id}">${u.nombre} (${ROLES[u.rol]})</option>`).join('')}</select>
     <label>Contraseña</label><input id="lp" type="password" value="demo">
-    <p class="muted">Demo: contraseña "demo". Primer ingreso pediría cambio de contraseña.</p>
+    <p class="muted">Demo: contraseña "demo". Los usuarios nuevos entran con la contraseña temporal que les da contabilidad.</p>
     <button class="primary" onclick="entrar()">Entrar</button>
   </div>`;
 }
-function entrar(){ db.sesion=$('#lu').value; vista='inicio'; save(); render(); }
+function entrar(){
+  const u = usuario($('#lu').value);
+  if(!u || $('#lp').value!==u.password) return toast('Contraseña incorrecta');
+  db.sesion=u.id; vista='inicio'; save(); render();
+}
 
 function vInicio(u){
   const p = mesActual();
@@ -241,13 +250,14 @@ function vEnviar(u){
   const lista = gastosPeriodo(u.id,p).filter(g=>g.estado!=='aprobado');
   const total = lista.reduce((s,g)=>s+g.valor,0);
   const estado = periodoEstado(u.id,p);
-  const aut = usuario(u.autoriza==='dueno' ? 'a1' : u.autoriza);
-  if(estado!=='abierto') return `<div class="card"><h2>Periodo ${p}: ${estado}</h2><p class="muted">Ya fue enviado.</p></div>`;
+  const aut = usuario(u.autoriza);
+  if(estado!=='abierto') return `<div class="card"><h2>Periodo ${p}: ${estado}</h2><p class="muted">Ya fue enviado${aut?' a '+aut.nombre:''}.</p></div>`;
+  if(!aut) return `<div class="card"><h2>Enviar periodo ${p}</h2><div class="alert">No tiene autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div></div>`;
   return `
   <div class="card">
     <h2>Enviar periodo ${p}</h2>
     <p>${lista.length} gasto(s) por <b class="total">${money(total)}</b></p>
-    <p class="muted">Al enviar, los gastos quedan bloqueados hasta la revisión.</p>
+    <p class="muted">Lo autoriza: <b>${aut.nombre}</b> (${aut.puesto}). Al enviar, los gastos quedan bloqueados hasta la revisión.</p>
     <button class="primary" onclick="enviarPeriodo()" ${lista.length?'':'disabled'}>Enviar a autorización</button>
     ${lista.length ? `<div class="alert">Luego aparece el botón <b>Avisar al autorizador</b> (WhatsApp) con el mensaje "Comprobación ${mesNombre(p)} completada".</div>` : ''}
   </div>`;
@@ -261,7 +271,7 @@ function enviarPeriodo(){
 }
 
 function vAutorizar(u){
-  const pend = db.periodos.filter(p=>p.estado==='enviado' && (u.rol==='autorizador' ? usuario(p.userId).autoriza===u.id : usuario(p.userId).autoriza===u.id));
+  const pend = db.periodos.filter(p=>p.estado==='enviado' && p.userId!==u.id && usuario(p.userId)?.autoriza===u.id);
   if(!pend.length) return `<div class="card"><h2>Autorizar</h2><p class="muted">No hay periodos pendientes.</p></div>`;
   return pend.map(p=>{
     const dueno = usuario(p.userId);
@@ -319,16 +329,84 @@ function finiquitar(userId, periodo){
 }
 function depositar(id){ const a=db.anticipos.find(x=>x.id===id); a.estado='depositado'; save(); render(); }
 
+/* ---- Matriz de usuarios (contabilidad) ---- */
+let editUser = null; // id en edición, 'nuevo' o null
 function vUsuarios(u){
-  return `<div class="card"><h2>Usuarios</h2>
-    <table><tr><th>Nombre</th><th>Puesto</th><th>Rol</th><th>Autoriza</th><th>Pago</th><th>Centro</th><th>Crédito</th><th>Saldo</th></tr>
-    ${db.usuarios.map(x=>`<tr><td>${x.nombre}</td><td>${x.puesto}</td><td>${x.rol}</td><td>${x.autoriza?usuario(x.autoriza)?.nombre||'Dueño':'—'}</td>
-      <td>${x.pago||'—'}</td><td>${x.centro||'—'}</td><td>${x.credito?money(x.credito):'—'}</td><td>${x.pago==='tarjeta'?money(saldoTarjeta(x)):'—'}</td></tr>`).join('')}
-    </table>
+  const x = editUser==='nuevo' ? {id:'', nombre:'', puesto:'', rol:'vendedor', autoriza:'', pago:'tarjeta', centro:'Comercial', credito:0}
+          : editUser ? usuario(editUser) : null;
+  const opcionesAut = x ? db.usuarios.filter(a=>puedeAutorizar(a) && a.id!==x.id && a.activo!==false) : [];
+  const form = !x ? '' : `
+  <div class="card">
+    <h2>${editUser==='nuevo'?'Nuevo usuario':'Editar: '+x.nombre}</h2>
+    <div class="row">
+      <div><label>Nombre</label><input id="un" value="${x.nombre}"></div>
+      <div><label>Puesto</label><input id="up" value="${x.puesto}"></div>
+    </div>
+    <div class="row">
+      <div><label>Rol</label><select id="ur">${Object.entries(ROLES).map(([k,l])=>`<option value="${k}" ${x.rol===k?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div><label>Lo autoriza</label><select id="ua"><option value="">— Nadie —</option>${opcionesAut.map(a=>`<option value="${a.id}" ${x.autoriza===a.id?'selected':''}>${a.nombre} (${a.puesto})</option>`).join('')}</select>
+        <p class="muted">Solo aparecen usuarios con rol Líder, Autorizador o Administrador.</p></div>
+    </div>
+    <div class="row">
+      <div><label>Tipo de pago</label><select id="upg">
+        <option value="tarjeta" ${x.pago==='tarjeta'?'selected':''}>Tarjeta de crédito</option>
+        <option value="anticipo" ${x.pago==='anticipo'?'selected':''}>Anticipo</option>
+        <option value="" ${!x.pago?'selected':''}>No aplica</option></select></div>
+      <div><label>Centro de costos</label><select id="uc"><option value="">—</option>${CENTROS.map(c=>`<option ${x.centro===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <div class="row">
+      <div><label>Cupo de tarjeta (COP)</label><input id="ucr" type="number" min="0" value="${x.credito||''}"></div>
+      <div></div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="primary" onclick="guardarUsuario()">Guardar</button>
+      <button class="ghost" onclick="editUser=null;render()">Cancelar</button>
+      ${editUser!=='nuevo'?`<button class="ghost" onclick="restablecer('${x.id}')">Restablecer contraseña</button>
+        <button class="danger" onclick="activar('${x.id}',${x.activo===false})">${x.activo===false?'Reactivar':'Desactivar'}</button>`:''}
+    </div>
+  </div>`;
+  const sinAut = db.usuarios.filter(y=>puedeComprobar(y) && y.activo!==false && (!y.autoriza || usuario(y.autoriza)?.activo===false));
+  return form + `<div class="card"><h2>Matriz de usuarios</h2>
+    ${sinAut.length?`<div class="alert">Sin autorizador asignado: ${sinAut.map(y=>y.nombre).join(', ')}. No podrán enviar su comprobación.</div>`:''}
+    <div style="margin:10px 0"><button class="primary" onclick="editUser='nuevo';render()">+ Nuevo usuario</button></div>
+    <div style="overflow-x:auto"><table><tr><th>Nombre</th><th>Puesto</th><th>Rol</th><th>Lo autoriza</th><th>Autoriza a</th><th>Pago</th><th>Centro</th><th>Saldo tarjeta</th><th></th></tr>
+    ${db.usuarios.map(y=>`<tr style="${y.activo===false?'opacity:.5':''}"><td>${y.nombre}${y.activo===false?' <span class="tag bad">inactivo</span>':''}</td><td>${y.puesto}</td><td>${ROLES[y.rol]}</td>
+      <td>${usuario(y.autoriza)?.nombre||'—'}</td><td>${autorizaA(y).map(z=>z.nombre).join(', ')||'—'}</td>
+      <td>${y.pago||'—'}</td><td>${y.centro||'—'}</td><td>${y.pago==='tarjeta'?money(saldoTarjeta(y))+' de '+money(y.credito):'—'}</td>
+      <td><button class="ghost" onclick="editUser='${y.id}';render()">Editar</button></td></tr>`).join('')}
+    </table></div>
     <p class="muted">Caja menor: Planta Amagá y Planta Malambo (encargado y monto fijo de 2.000.000 COP, por confirmar).</p>
-    <p class="muted">Altas, restablecer contraseña y políticas por rol: pendientes en la siguiente versión.</p>
   </div>`;
 }
+function claveTemporal(){ return 'Tu' + Math.random().toString(36).slice(2,8) + Math.floor(Math.random()*90+10); }
+function guardarUsuario(){
+  const d = { nombre:$('#un').value.trim(), puesto:$('#up').value.trim(), rol:$('#ur').value, autoriza:$('#ua').value||null,
+    pago:$('#upg').value||null, centro:$('#uc').value||null, credito:Number($('#ucr').value||0) };
+  if(!d.nombre || !d.puesto) return toast('Nombre y puesto son obligatorios');
+  if(['vendedor','lider'].includes(d.rol) && !d.autoriza) return toast('Asigne quién lo autoriza');
+  if(['vendedor','lider'].includes(d.rol) && !d.pago) return toast('Defina el tipo de pago');
+  if(['vendedor','lider'].includes(d.rol) && !d.centro) return toast('Defina el centro de costos');
+  if(d.pago==='tarjeta' && !d.credito) return toast('Ingrese el cupo de la tarjeta');
+  if(d.pago!=='tarjeta') d.credito = 0;
+  if(editUser==='nuevo'){
+    const clave = claveTemporal();
+    db.usuarios.push({id:'u'+Date.now(), ...d, password:clave, cambiarClave:true});
+    alert(`Usuario creado.\nContraseña temporal: ${clave}\nEntréguela a ${d.nombre}.`);
+  } else {
+    if(d.autoriza===editUser) return toast('Nadie puede autorizarse a sí mismo');
+    Object.assign(usuario(editUser), d);
+    // Si deja de poder autorizar, sus autorizados quedan sin autorizador
+    if(!puedeAutorizar(d)) db.usuarios.forEach(y=>{ if(y.autoriza===editUser) y.autoriza=null; });
+    toast('Usuario actualizado');
+  }
+  editUser=null; save(); render();
+}
+function restablecer(id){
+  const y = usuario(id); const clave = claveTemporal();
+  y.password = clave; y.cambiarClave = true; save();
+  alert(`Nueva contraseña temporal de ${y.nombre}: ${clave}`);
+}
+function activar(id, on){ usuario(id).activo = on; save(); editUser=null; render(); }
 function vDashboard(u){
   const todos = db.gastos.filter(g=>g.periodo===mesActual());
   const porConcepto = {}; todos.forEach(g=>porConcepto[g.concepto]=(porConcepto[g.concepto]||0)+g.valor);

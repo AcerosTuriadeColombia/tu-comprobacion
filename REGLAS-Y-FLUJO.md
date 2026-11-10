@@ -1,6 +1,6 @@
 # TU comprobación — Reglas, condiciones y flujo de trabajo
 
-Versión 0.1 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
+Versión 0.2 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
 
 ## 1. Roles
 
@@ -8,23 +8,27 @@ Versión 0.1 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes 
 |---|---|---|
 | Vendedor | Registrar gastos del periodo, editar/eliminar mientras esté abierto, enviar periodo a autorización, solicitar anticipo | Autorizar, ver gastos de otros |
 | Líder | Lo del vendedor + autorizar a sus vendedores | Autorizar gastos de sí mismo (lo autoriza el dueño) |
-| Autorizador (Mauricio Lopera para comerciales; dueño para líderes) | Revisar y aprobar/devolver gasto por gasto | Registrar pagos |
-| Contabilidad | Confirmar depósito de anticipos, finiquitar periodo, registrar pago de tarjeta, exportar | Crear gastos ajenos |
-| Administrador | Alta de usuarios, políticas, centros de costos, cajas menores, dashboard, restablecer contraseñas | — |
+| Autorizador | Revisar y aprobar/devolver gasto por gasto de las personas que tiene asignadas | Registrar pagos |
+| Contabilidad | Alta y edición de usuarios, matriz de autorización (quién autoriza a quién), restablecer contraseñas, confirmar depósito de anticipos, finiquitar periodo, registrar pago de tarjeta, exportar | Crear gastos ajenos |
+| Administrador | Políticas, centros de costos, cajas menores, dashboard | — |
+
+Los autorizadores no se fijan por nombre en la app: contabilidad los asigna en la matriz de usuarios. Pueden ser autorizadores los usuarios con rol Líder, Autorizador o Administrador. Nadie puede autorizarse a sí mismo. Un vendedor o líder sin autorizador asignado no puede enviar su periodo.
 
 ## 2. Usuarios
 
-Cada usuario tiene: nombre, puesto, rol, correo (opcional, solo referencia), quién lo autoriza, tipo de pago (tarjeta de crédito o anticipo), centro de costos (Planta Amagá, Planta Malambo, Comercial), saldo de crédito (si es tarjeta) y política según rol.
+Contabilidad da de alta a todos los usuarios. Cada usuario tiene: nombre, puesto, rol, correo (opcional, solo referencia), quién lo autoriza, tipo de pago (tarjeta de crédito o anticipo), centro de costos (Planta Amagá, Planta Malambo, Comercial), saldo de crédito (si es tarjeta) y política según rol.
 
 - Cajas menores se dan de alta como usuario tipo "Caja menor": planta, encargado, monto fijo (2.000.000 COP, por confirmar).
-- Recuperación de contraseña: solo el administrador la restablece y entrega una temporal.
+- Al crear un usuario, la app genera una contraseña temporal que contabilidad entrega a la persona.
+- Recuperación de contraseña: solo contabilidad la restablece y entrega una temporal.
+- Los usuarios que salen de la empresa se desactivan (no se borran) para conservar su historial.
 
 ## 3. Acceso
 
 - Ingreso con usuario y contraseña.
 - Cambio de contraseña en el primer ingreso y cada 90 días.
 - Mínimo 8 caracteres, con letras y números.
-- Bloqueo tras 5 intentos fallidos hasta que el administrador lo desbloquee.
+- Bloqueo tras 5 intentos fallidos hasta que contabilidad lo desbloquee.
 - Cierre de sesión tras 30 minutos de inactividad.
 
 ## 4. Conceptos y reglas de gasto
@@ -86,6 +90,7 @@ Plazo de radicación: los primeros días del mes. La app avisa cuando se acerca 
 
 ## 10. Pendientes antes de producción
 
+- Definir en la matriz quién autoriza a cada comercial y a cada líder.
 - Encargados de caja menor por planta (Amagá y Malambo).
 - Monto definitivo de cada caja menor (hoy 2.000.000 COP).
 - Política de montos por concepto y rol (inventario).
