@@ -723,8 +723,8 @@ function vContab(u){
   </div>
   <div class="card"><h2>Exportar periodo</h2>
     ${meses.length ? `<div class="row"><div><label>Mes</label><select id="xm">${meses.map(m => `<option value="${m}">${mesNombre(m)}</option>`).join('')}</select></div><div></div></div>
-      <p class="muted">Incluye los gastos autorizados y finiquitados del mes. El ZIP trae el CSV (abre en Excel) y las fotos.</p>
-      <div class="acciones"><button class="primary" onclick="exportarZIP($('#xm').value)">Descargar ZIP con fotos</button><button class="ghost" onclick="exportarCSV($('#xm').value)">Solo Excel (CSV)</button></div>`
+      <p class="muted">Incluye los gastos autorizados y finiquitados del mes. El ZIP trae el Excel y las fotos.</p>
+      <div class="acciones"><button class="primary" onclick="exportarZIP($('#xm').value)">Descargar ZIP con fotos</button><button class="ghost" onclick="exportarExcel($('#xm').value)">Solo Excel</button></div>`
       : '<p class="muted">Aún no hay periodos autorizados.</p>'}
   </div>
   <div class="card"><h2>Anticipos por depositar</h2>
@@ -762,21 +762,46 @@ function depositar(id){
 }
 function filasExport(p){ return db.gastos.filter(g => g.periodo === p && ['aprobado','pagado'].includes(g.estado)); }
 const nombreFoto = g => `fotos/${g.periodo}_${usuario(g.userId)?.login}_${g.fecha}_${g.id.slice(0,8)}.jpg`;
-function csvMes(p){
-  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+function filasExcel(p){
   const head = ['Periodo','Colaborador','Usuario','Puesto','Tipo de pago','Centro de costos','Fecha','Concepto','Valor','Medio de pago','Empresa/Cliente','Personas','N personas','Fuera de ciudad','Factura enviada','Comentario','Estado','Foto'];
   const rows = filasExport(p).map(g => { const u = usuario(g.userId) || {};
-    return [g.periodo, u.nombre, u.login, u.puesto, PAGOS[u.pago] || '', g.centro, g.fecha, nombreConcepto(g.concepto), g.valor, MEDIOS[g.medio] || g.medio,
-      g.empresa, g.personas, g.cliente ? g.nPersonas : '', g.fuera ? 'Sí' : '', g.factura ? 'Sí' : 'No', g.comentario, g.estado === 'pagado' ? 'finiquitado' : 'autorizado', g.fotoPath ? nombreFoto(g) : ''];
+    return [g.periodo, u.nombre, u.login, u.puesto, PAGOS[u.pago] || '', g.centro, g.fecha, nombreConcepto(g.concepto), Number(g.valor), MEDIOS[g.medio] || g.medio,
+      g.empresa, g.personas, g.cliente ? Number(g.nPersonas) : '', g.fuera ? 'Sí' : '', g.factura ? 'Sí' : 'No', g.comentario, g.estado === 'pagado' ? 'finiquitado' : 'autorizado', g.fotoPath ? nombreFoto(g) : ''];
   });
-  return '﻿' + [head, ...rows].map(r => r.map(q).join(';')).join('\r\n');
+  return [head, ...rows];
+}
+// Genera un .xlsx real (abre igual en cualquier Excel, sin depender del separador regional).
+async function xlsxMes(p){
+  const filas = filasExcel(p);
+  const x = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  const col = i => { let s = ''; i++; while(i){ const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const anchos = [10,24,16,18,18,18,12,20,14,14,22,26,11,14,15,30,12,44];
+  const sheetRows = filas.map((r, ri) => `<row r="${ri+1}">` + r.map((v, ci) => {
+    const ref = col(ci) + (ri + 1), st = ri === 0 ? ' s="1"' : (ci === 8 ? ' s="2"' : '');
+    if(typeof v === 'number' && isFinite(v)) return `<c r="${ref}"${st}><v>${v}</v></c>`;
+    if(v === '' || v == null) return `<c r="${ref}"${st}/>`;
+    return `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  }).join('') + '</row>').join('');
+  const n = filas.length, totalFila = n + 1;
+  const total = n > 1 ? `<row r="${totalFila}"><c r="H${totalFila}" t="inlineStr" s="1"><is><t>Total</t></is></c><c r="I${totalFila}" s="3"><f>SUM(I2:I${n})</f></c></row>` : '';
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>');
+  zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  zip.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${x(mesNombre(p)).slice(0,31)}" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+  zip.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
+  zip.file('xl/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;$&quot; #,##0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>');
+  zip.file('xl/worksheets/sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${anchos.map((w, i) => `<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${sheetRows}${total}</sheetData><autoFilter ref="A1:${col(filas[0].length - 1)}${n}"/></worksheet>`);
+  return await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 function descargar(blob, nombre){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
-function exportarCSV(p){ descargar(new Blob([csvMes(p)], {type:'text/csv;charset=utf-8'}), `comprobaciones_${p}.csv`); }
+function exportarExcel(p){
+  if(!window.JSZip) return toast('No se pudo cargar el generador de Excel. Recargue la página.');
+  ejecutar(async () => { descargar(await xlsxMes(p), `comprobaciones_${p}.xlsx`); });
+}
 function exportarZIP(p){
-  if(!window.JSZip) return toast('No se pudo cargar el compresor ZIP. Descargue el CSV.');
+  if(!window.JSZip) return toast('No se pudo cargar el compresor ZIP. Recargue la página.');
   ejecutar(async () => {
-    const zip = new JSZip(); zip.file(`comprobaciones_${p}.csv`, csvMes(p));
+    const zip = new JSZip(); zip.file(`comprobaciones_${p}.xlsx`, await xlsxMes(p));
     for(const g of filasExport(p).filter(g => g.fotoPath)){
       const {data, error} = await sb.storage.from('tickets').download(g.fotoPath);
       if(error) throw new Error('No se pudo descargar una foto: ' + error.message);
