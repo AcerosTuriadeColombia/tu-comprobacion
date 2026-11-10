@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TU comprobación</title>
+<style>
+  :root { --turia:#0b3d6b; --tu:#f29a1f; --bg:#f4f6f9; --card:#fff; --line:#dde3ea; --ok:#1f8a4c; --warn:#b26a00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:#1d2530; }
+  header { background:var(--turia); color:#fff; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+  .logo { font-weight:800; font-size:20px; line-height:1; }
+  .logo b { color:var(--tu); }
+  .logo small { display:block; font-weight:500; font-size:12px; opacity:.9; }
+  nav button { background:none; border:0; color:#cfe0f2; padding:8px 10px; cursor:pointer; font-size:14px; }
+  nav button.on { color:#fff; border-bottom:2px solid var(--tu); }
+  main { padding:16px; max-width:900px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:14px; }
+  h2 { margin:0 0 12px; font-size:18px; color:var(--turia); }
+  label { display:block; font-size:13px; margin:10px 0 4px; color:#4a5566; }
+  input, select, textarea { width:100%; padding:9px; border:1px solid var(--line); border-radius:6px; font-size:15px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:600px) { .row { grid-template-columns:1fr; } }
+  button.primary { background:var(--turia); color:#fff; border:0; padding:10px 16px; border-radius:6px; font-size:15px; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--turia); border:1px solid var(--turia); padding:9px 14px; border-radius:6px; cursor:pointer; }
+  button.danger { background:#fff; color:var(--bad); border:1px solid var(--bad); padding:9px 14px; border-radius:6px; cursor:pointer; }
+  .tag { display:inline-block; font-size:12px; padding:3px 8px; border-radius:99px; background:#eef2f7; }
+  .tag.ok { background:#e3f4ea; color:var(--ok); } .tag.warn { background:#fff3dc; color:var(--warn); } .tag.bad { background:#fde7e5; color:var(--bad); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .muted { color:#6b7787; font-size:13px; }
+  .total { font-size:22px; font-weight:700; color:var(--turia); }
+  .alert { background:#fff3dc; border:1px solid #f0c674; padding:10px; border-radius:8px; margin-top:10px; font-size:14px; }
+  .hidden { display:none; }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#1d2530; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Turia<b>TU</b><small>comprobación</small></div>
+  <nav id="nav"></nav>
+</header>
+<main id="app"></main>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+/* PROTOTIPO: datos en localStorage. Producción = Supabase Auth + tablas. */
+const CONCEPTOS = [
+  {id:'desayuno', nombre:'Desayuno', comidaIndividual:true},
+  {id:'almuerzo', nombre:'Almuerzo', comidaIndividual:true},
+  {id:'comida_cliente', nombre:'Comida con cliente', cliente:true, porPersona:true},
+  {id:'cafe_cliente', nombre:'Café con cliente', cliente:true, porPersona:true},
+  {id:'peaje', nombre:'Peaje'},
+  {id:'combustible', nombre:'Combustible'},
+  {id:'parqueadero', nombre:'Parqueadero'},
+  {id:'obsequio', nombre:'Obsequio', obsequio:true},
+  {id:'hospedaje', nombre:'Hospedaje'},
+];
+const CENTROS = ['Planta Amagá','Planta Malambo','Comercial'];
+const TOPES = {}; // vacío hasta recibir la política de inventario
+
+const seed = {
+  usuarios: [
+    {id:'u1', nombre:'Mauricio Lopera', rol:'autorizador', puesto:'Gerente comercial', autoriza:null, pago:'tarjeta', centro:'Comercial', credito:6000000, password:'demo'},
+    {id:'u2', nombre:'Vendedor Demo', rol:'vendedor', puesto:'Vendedor', autoriza:'u1', pago:'tarjeta', centro:'Comercial', credito:4000000, password:'demo'},
+    {id:'u3', nombre:'Líder Demo', rol:'lider', puesto:'Líder comercial', autoriza:'dueno', pago:'anticipo', centro:'Comercial', credito:0, password:'demo'},
+    {id:'c1', nombre:'Contabilidad', rol:'contabilidad', puesto:'Contador', autoriza:null, pago:null, centro:null, credito:0, password:'demo'},
+    {id:'a1', nombre:'Administrador', rol:'admin', puesto:'Administración', autoriza:null, pago:null, centro:null, credito:0, password:'demo'},
+  ],
+  gastos: [
+    {id:'g1', userId:'u2', periodo:'2026-11', fecha:'2026-11-03', concepto:'comida_cliente', valor:184000, centro:'Comercial', empresa:'HomeCenter', personas:'Compras', cliente:true, nPersonas:3, medio:'tarjeta', estado:'borrador', comentario:'', foto:true},
+    {id:'g2', userId:'u2', periodo:'2026-11', fecha:'2026-11-04', concepto:'peaje', valor:21500, centro:'Comercial', medio:'efectivo', estado:'borrador', comentario:'', foto:true},
+  ],
+  periodos: [],
+  anticipos: [],
+  sesion: null,
+};
+
+function load() { const s = localStorage.getItem('tuc'); return s ? JSON.parse(s) : structuredClone(seed); }
+function save() { localStorage.setItem('tuc', JSON.stringify(db)); }
+let db = load();
+let vista = 'inicio';
+const $ = s => document.querySelector(s);
+const money = n => '$ ' + Number(n||0).toLocaleString('es-CO');
+const hoy = () => new Date().toISOString().slice(0,10);
+const mesActual = () => hoy().slice(0,7);
+const nombreConcepto = id => (CONCEPTOS.find(c=>c.id===id)||{}).nombre || id;
+const usuario = id => db.usuarios.find(u=>u.id===id);
+const yo = () => usuario(db.sesion);
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),2200); }
+
+function puedeComprobar(u){ return ['vendedor','lider'].includes(u.rol); }
+function gastosPeriodo(userId, periodo){ return db.gastos.filter(g=>g.userId===userId && g.periodo===periodo); }
+function periodoEstado(userId, periodo){
+  const p = db.periodos.find(x=>x.userId===userId && x.periodo===periodo);
+  return p ? p.estado : 'abierto';
+}
+function saldoTarjeta(u){
+  const gastado = db.gastos.filter(g=>g.userId===u.id && g.medio==='tarjeta' && g.estado!=='pagado').reduce((s,g)=>s+g.valor,0);
+  return u.credito - gastado;
+}
+
+function renderNav(){
+  const u = yo();
+  if(!u){ $('#nav').innerHTML=''; return; }
+  let items = [['inicio','Inicio']];
+  if(puedeComprobar(u)) items.push(['gastos','Mis gastos'],['enviar','Enviar periodo']);
+  if(u.rol==='lider' || u.rol==='autorizador') items.push(['autorizar','Autorizar']);
+  if(u.rol==='contabilidad') items.push(['contab','Contabilidad']);
+  if(u.rol==='admin') items.push(['usuarios','Usuarios'],['dashboard','Dashboard']);
+  items.push(['salir','Salir']);
+  $('#nav').innerHTML = items.map(([k,l])=>`<button class="${vista===k?'on':''}" onclick="ir('${k}')">${l}</button>`).join('');
+}
+function ir(v){ if(v==='salir'){ db.sesion=null; save(); vista='inicio'; } else vista=v; render(); }
+
+function render(){
+  renderNav();
+  const u = yo();
+  if(!u){ return login(); }
+  const fn = {inicio:vInicio, gastos:vGastos, enviar:vEnviar, autorizar:vAutorizar, contab:vContab, usuarios:vUsuarios, dashboard:vDashboard}[vista] || vInicio;
+  $('#app').innerHTML = fn(u);
+}
+
+function login(){
+  $('#app').innerHTML = `
+  <div class="card" style="max-width:380px;margin:40px auto">
+    <h2>Ingresar</h2>
+    <label>Usuario</label><select id="lu">${db.usuarios.map(u=>`<option value="${u.id}">${u.nombre} (${u.rol})</option>`).join('')}</select>
+    <label>Contraseña</label><input id="lp" type="password" value="demo">
+    <p class="muted">Demo: contraseña "demo". Primer ingreso pediría cambio de contraseña.</p>
+    <button class="primary" onclick="entrar()">Entrar</button>
+  </div>`;
+}
+function entrar(){ db.sesion=$('#lu').value; vista='inicio'; save(); render(); }
+
+function vInicio(u){
+  const p = mesActual();
+  const mis = gastosPeriodo(u.id,p);
+  const total = mis.reduce((s,g)=>s+g.valor,0);
+  const estado = periodoEstado(u.id,p);
+  let extra='';
+  if(u.pago==='tarjeta') extra = `<p>Saldo de tarjeta: <b>${money(saldoTarjeta(u))}</b> de ${money(u.credito)}</p>`;
+  return `
+  <div class="card">
+    <h2>Hola, ${u.nombre}</h2>
+    <p class="muted">${u.puesto} · ${u.centro||'Sin centro'} · ${u.pago==='tarjeta'?'Tarjeta de crédito':u.pago==='anticipo'?'Anticipo':''}</p>
+    ${extra}
+    <p>Periodo ${p}: <span class="tag ${estado==='abierto'?'':'warn'}">${estado}</span></p>
+    <p class="total">${money(total)}</p>
+    <p class="muted">${mis.length} gasto(s) registrados este mes</p>
+    <p class="muted">Radicación: primeros días del mes.</p>
+  </div>`;
+}
+
+function vGastos(u){
+  const p = mesActual();
+  const abierto = periodoEstado(u.id,p)==='abierto';
+  const lista = gastosPeriodo(u.id,p);
+  return `
+  <div class="card">
+    <h2>Registrar gasto</h2>
+    ${abierto ? formGasto(u) : '<p class="muted">El periodo está enviado. Los gastos quedan bloqueados.</p>'}
+  </div>
+  <div class="card">
+    <h2>Gastos del periodo ${p}</h2>
+    <table>
+      <tr><th>Fecha</th><th>Concepto</th><th>Centro</th><th>Medio</th><th class="muted">Valor</th><th></th></tr>
+      ${lista.map(g=>`<tr>
+        <td>${g.fecha}</td><td>${nombreConcepto(g.concepto)}${g.empresa?`<br><span class="muted">${g.empresa}</span>`:''}</td>
+        <td>${g.centro}</td><td>${g.medio}</td><td>${money(g.valor)}</td>
+        <td>${abierto?`<button class="danger" onclick="borrarGasto('${g.id}')">Eliminar</button>`:`<span class="tag ${g.estado==='devuelto'?'bad':'ok'}">${g.estado}</span>`}</td>
+      </tr>`).join('') || '<tr><td colspan="6" class="muted">Sin gastos</td></tr>'}
+    </table>
+  </div>`;
+}
+
+function formGasto(u){
+  return `
+  <div class="row">
+    <div><label>Fecha del ticket</label><input id="gf" type="date" value="${hoy()}"></div>
+    <div><label>Concepto</label>
+      <select id="gc" onchange="ajustarForm()">${CONCEPTOS.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div>
+  </div>
+  <div class="row">
+    <div><label>Valor total (COP)</label><input id="gv" type="number" min="0" oninput="validarTope()"></div>
+    <div><label>Centro de costos</label><select id="gcc">${CENTROS.map(c=>`<option ${c===u.centro?'selected':''}>${c}</option>`).join('')}</select></div>
+  </div>
+  <div class="row">
+    <div><label>Medio de pago</label><select id="gm"><option value="tarjeta">Tarjeta de crédito</option><option value="efectivo">Efectivo</option></select></div>
+    <div><label>Foto del ticket</label><input id="gfoto" type="file" accept="image/*"><p class="muted">La app lee fecha y valor como sugerencia; confirme antes de guardar.</p></div>
+  </div>
+  <div id="extras"></div>
+  <div id="avisoTope"></div>
+  <label><input id="gfact" type="checkbox" style="width:auto"> Factura ya enviada al correo de la empresa</label>
+  <div style="margin-top:12px"><button class="primary" onclick="guardarGasto()">Guardar gasto</button></div>`;
+}
+
+function ajustarForm(){
+  const c = CONCEPTOS.find(x=>x.id===$('#gc').value);
+  let h='';
+  if(c.cliente) h += `<div class="row"><div><label>Empresa</label><input id="gemp"></div><div><label>Nombres de las personas</label><input id="gper"></div></div>
+    <div class="row"><div><label>Número de personas</label><input id="gn" type="number" min="1" value="1" oninput="validarTope()"></div><div></div></div>`;
+  if(c.obsequio) h += `<label>Nombre del cliente</label><input id="gemp">`;
+  if(c.comidaIndividual) h += `<label><input id="gfuera" type="checkbox" style="width:auto"> Fuera de la ciudad de residencia o pernocta (requerido para comidas individuales)</label>`;
+  $('#extras').innerHTML = h;
+  validarTope();
+}
+
+function validarTope(){
+  const c = CONCEPTOS.find(x=>x.id===$('#gc')?.value);
+  const v = Number($('#gv')?.value||0);
+  const n = Number($('#gn')?.value||1);
+  const tope = c ? TOPES[c.id] : null;
+  const real = c?.porPersona ? v/Math.max(n,1) : v;
+  $('#avisoTope').innerHTML = (tope && real>tope)
+    ? `<div class="alert">Este gasto supera el presupuesto ${c.porPersona?'por persona':''} (${money(tope)}). Escriba el detalle del motivo.<textarea id="gcom" rows="2" placeholder="Motivo"></textarea></div>` : '';
+}
+
+function guardarGasto(){
+  const u = yo();
+  const c = CONCEPTOS.find(x=>x.id===$('#gc').value);
+  const valor = Number($('#gv').value||0);
+  if(!valor){ return toast('Ingrese el valor'); }
+  if(!$('#gfoto').files.length){ return toast('Adjunte la foto del ticket'); }
+  if(c.obsequio && !$('#gemp')?.value){ return toast('Nombre del cliente requerido'); }
+  if(c.cliente && (!$('#gemp')?.value || !$('#gper')?.value)){ return toast('Empresa y nombres requeridos'); }
+  if(c.comidaIndividual && !$('#gfuera')?.checked){ return toast('Comida individual solo fuera de ciudad o con pernocta'); }
+  const tope = TOPES[c.id];
+  const real = c.porPersona ? valor/Math.max(Number($('#gn')?.value||1),1) : valor;
+  if(tope && real>tope && !$('#gcom')?.value){ return toast('Escriba el motivo del sobrepresupuesto'); }
+  db.gastos.push({id:'g'+Date.now(), userId:u.id, periodo:mesActual(), fecha:$('#gf').value, concepto:c.id, valor,
+    centro:$('#gcc').value, medio:$('#gm').value, empresa:$('#gemp')?.value||'', personas:$('#gper')?.value||'',
+    nPersonas:Number($('#gn')?.value||1), cliente:!!c.cliente, estado:'borrador', comentario:$('#gcom')?.value||'', foto:true});
+  save(); toast('Gasto guardado'); render();
+}
+
+function borrarGasto(id){ db.gastos = db.gastos.filter(g=>g.id!==id); save(); render(); }
+
+function vEnviar(u){
+  const p = mesActual();
+  const lista = gastosPeriodo(u.id,p).filter(g=>g.estado!=='aprobado');
+  const total = lista.reduce((s,g)=>s+g.valor,0);
+  const estado = periodoEstado(u.id,p);
+  const aut = usuario(u.autoriza==='dueno' ? 'a1' : u.autoriza);
+  if(estado!=='abierto') return `<div class="card"><h2>Periodo ${p}: ${estado}</h2><p class="muted">Ya fue enviado.</p></div>`;
+  return `
+  <div class="card">
+    <h2>Enviar periodo ${p}</h2>
+    <p>${lista.length} gasto(s) por <b class="total">${money(total)}</b></p>
+    <p class="muted">Al enviar, los gastos quedan bloqueados hasta la revisión.</p>
+    <button class="primary" onclick="enviarPeriodo()" ${lista.length?'':'disabled'}>Enviar a autorización</button>
+    ${lista.length ? `<div class="alert">Luego aparece el botón <b>Avisar al autorizador</b> (WhatsApp) con el mensaje "Comprobación ${mesNombre(p)} completada".</div>` : ''}
+  </div>`;
+}
+function mesNombre(p){ return ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][Number(p.slice(5))-1]; }
+function enviarPeriodo(){
+  const u = yo(); const p = mesActual();
+  db.periodos.push({userId:u.id, periodo:p, estado:'enviado', enviado:hoy()});
+  gastosPeriodo(u.id,p).forEach(g=>g.estado='enviado');
+  save(); toast('Periodo enviado'); vista='enviar'; render();
+}
+
+function vAutorizar(u){
+  const pend = db.periodos.filter(p=>p.estado==='enviado' && (u.rol==='autorizador' ? usuario(p.userId).autoriza===u.id : usuario(p.userId).autoriza===u.id));
+  if(!pend.length) return `<div class="card"><h2>Autorizar</h2><p class="muted">No hay periodos pendientes.</p></div>`;
+  return pend.map(p=>{
+    const dueno = usuario(p.userId);
+    const gs = gastosPeriodo(p.userId,p.periodo);
+    return `<div class="card"><h2>${dueno.nombre} · ${p.periodo}</h2>
+      <table>
+        <tr><th><input type="checkbox" onclick="todos('${p.userId}',this.checked)"></th><th>Fecha</th><th>Concepto</th><th>Valor</th><th>Comentario</th></tr>
+        ${gs.map(g=>`<tr><td><input type="checkbox" class="ck-${p.userId}" value="${g.id}"></td>
+          <td>${g.fecha}</td><td>${nombreConcepto(g.concepto)}</td><td>${money(g.valor)}</td>
+          <td><input id="c-${g.id}" placeholder="Si devuelve, explique"></td></tr>`).join('')}
+      </table>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="primary" onclick="resolver('${p.userId}','${p.periodo}','aprobar')">Aprobar seleccionados</button>
+        <button class="danger" onclick="resolver('${p.userId}','${p.periodo}','devolver')">Devolver seleccionados</button>
+      </div></div>`;
+  }).join('');
+}
+function todos(userId, on){ document.querySelectorAll('.ck-'+userId).forEach(c=>c.checked=on); }
+function resolver(userId, periodo, accion){
+  const ids = [...document.querySelectorAll('.ck-'+userId+':checked')].map(c=>c.value);
+  if(!ids.length) return toast('Seleccione gastos');
+  if(accion==='devolver'){
+    const sinMotivo = ids.find(id=>!$('#c-'+id).value.trim());
+    if(sinMotivo) return toast('Escriba el comentario de cada devuelto');
+  }
+  ids.forEach(id=>{
+    const g = db.gastos.find(x=>x.id===id);
+    g.estado = accion==='aprobar' ? 'aprobado' : 'devuelto';
+    g.comentario = accion==='devolver' ? $('#c-'+id).value : g.comentario;
+  });
+  const gs = gastosPeriodo(userId,periodo);
+  const p = db.periodos.find(x=>x.userId===userId && x.periodo===periodo);
+  if(gs.every(g=>g.estado==='aprobado')){ p.estado='autorizado'; toast('Periodo autorizado'); }
+  else if(gs.some(g=>g.estado==='devuelto')){ p.estado='devuelto'; gs.forEach(g=>{ if(g.estado==='enviado') g.estado='enviado'; }); toast('Devueltos al colaborador'); }
+  save(); render();
+}
+
+function vContab(u){
+  const lista = db.periodos.filter(p=>p.estado==='autorizado');
+  const anticipos = db.anticipos.filter(a=>a.estado==='solicitado');
+  return `
+  <div class="card"><h2>Periodos por finiquitar</h2>
+    ${lista.map(p=>{ const d=usuario(p.userId); const t=gastosPeriodo(p.userId,p.periodo).reduce((s,g)=>s+g.valor,0);
+      return `<p>${d.nombre} · ${p.periodo} · ${money(t)} <button class="ghost" onclick="finiquitar('${p.userId}','${p.periodo}')">Finiquitar</button></p>`; }).join('') || '<p class="muted">Nada pendiente.</p>'}
+  </div>
+  <div class="card"><h2>Anticipos solicitados</h2>
+    ${anticipos.map(a=>`<p>${usuario(a.userId).nombre} · ${money(a.monto)} · ${a.motivo} <button class="ghost" onclick="depositar('${a.id}')">Confirmar depósito</button></p>`).join('') || '<p class="muted">Nada pendiente.</p>'}
+  </div>`;
+}
+function finiquitar(userId, periodo){
+  const p = db.periodos.find(x=>x.userId===userId && x.periodo===periodo);
+  p.estado='finiquitado';
+  gastosPeriodo(userId,periodo).forEach(g=>g.estado='pagado');
+  save(); toast('Periodo finiquitado'); render();
+}
+function depositar(id){ const a=db.anticipos.find(x=>x.id===id); a.estado='depositado'; save(); render(); }
+
+function vUsuarios(u){
+  return `<div class="card"><h2>Usuarios</h2>
+    <table><tr><th>Nombre</th><th>Puesto</th><th>Rol</th><th>Autoriza</th><th>Pago</th><th>Centro</th><th>Crédito</th><th>Saldo</th></tr>
+    ${db.usuarios.map(x=>`<tr><td>${x.nombre}</td><td>${x.puesto}</td><td>${x.rol}</td><td>${x.autoriza?usuario(x.autoriza)?.nombre||'Dueño':'—'}</td>
+      <td>${x.pago||'—'}</td><td>${x.centro||'—'}</td><td>${x.credito?money(x.credito):'—'}</td><td>${x.pago==='tarjeta'?money(saldoTarjeta(x)):'—'}</td></tr>`).join('')}
+    </table>
+    <p class="muted">Caja menor: Planta Amagá y Planta Malambo (encargado y monto fijo de 2.000.000 COP, por confirmar).</p>
+    <p class="muted">Altas, restablecer contraseña y políticas por rol: pendientes en la siguiente versión.</p>
+  </div>`;
+}
+function vDashboard(u){
+  const todos = db.gastos.filter(g=>g.periodo===mesActual());
+  const porConcepto = {}; todos.forEach(g=>porConcepto[g.concepto]=(porConcepto[g.concepto]||0)+g.valor);
+  const porCentro = {}; todos.forEach(g=>porCentro[g.centro]=(porCentro[g.centro]||0)+g.valor);
+  const filas = o => Object.entries(o).map(([k,v])=>`<tr><td>${nombreConcepto(k)===k?k:nombreConcepto(k)}</td><td>${money(v)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">Sin datos</td></tr>';
+  return `<div class="card"><h2>Gasto del mes por concepto</h2><table>${filas(porConcepto)}</table></div>
+  <div class="card"><h2>Gasto del mes por centro de costos</h2><table>${filas(porCentro)}</table></div>`;
+}
+
+render();
+</script>
+</body>
+</html>
