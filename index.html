@@ -131,7 +131,7 @@ let nuevoGastoId = null, subidas = new Set();
 
 const mapU = r => ({id:r.id, login:r.login, nombre:r.nombre, puesto:r.puesto, rol:r.rol, autoriza:r.autoriza, pago:r.pago, centro:r.centro,
   credito:Number(r.credito), montoCaja:Number(r.monto_caja), encargado:r.encargado, telefono:r.telefono, activo:r.activo, bloqueado:r.bloqueado,
-  cambiarClave:r.cambiar_clave, claveFecha:r.clave_fecha});
+  cambiarClave:r.cambiar_clave, claveFecha:r.clave_fecha, sinAutorizador:!!r.sin_autorizador});
 const mapG = r => ({id:r.id, userId:r.user_id, periodo:r.periodo, fecha:r.fecha, concepto:r.concepto, valor:Number(r.valor), centro:r.centro, medio:r.medio,
   empresa:r.empresa, personas:r.personas, nPersonas:r.n_personas, cliente:r.cliente, fuera:r.fuera, factura:r.factura, comentario:r.comentario,
   devolucion:r.devolucion, estado:r.estado, corregido:r.corregido, fotoPath:r.foto_path, fotoArchivada:r.foto_archivada});
@@ -373,7 +373,7 @@ function vInicio(u){
       h += `<div class="alert bad">Tiene gastos devueltos en <b>${mesNombre(p.periodo)}</b>. Corríjalos y reenvíe.
         <div class="acciones"><button class="ghost" onclick="ir('gastos');per='${p.periodo}';render()">Ver devueltos</button></div></div>`;
     });
-    if(!usuario(u.autoriza)) h += `<div class="alert">No tiene autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div>`;
+    if(!usuario(u.autoriza) && !u.sinAutorizador) h += `<div class="alert">No tiene autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div>`;
     const p = mesActual(), mis = gastosDe(u.id, p);
     h += `<h3>${mesNombre(p)} ${tagEstado(estadoPer(u.id, p))}</h3><p class="total">${money(sum(mis))}</p>
       <p class="muted">${mis.length} gasto(s) registrados · radicación en los primeros ${DIA_LIMITE} días del mes siguiente.</p>
@@ -551,7 +551,7 @@ function vEnviar(u){
   if(!per) per = periodoDefecto(u);
   const estado = estadoPer(u.id, per), r = perRec(u.id, per);
   const todos = gastosDe(u.id, per), lista = todos.filter(g => g.estado === 'borrador');
-  const aut = usuario(u.autoriza);
+  const aut = usuario(u.autoriza), directo = u.sinAutorizador, cont = contabilidad();
   let h = `<div class="card">${selectorPeriodo(u)}</div><div class="card"><h2>Enviar ${mesNombre(per)}</h2>`;
   if(estado === 'enviado'){
     const env = todos.filter(g => g.estado === 'enviado');
@@ -559,10 +559,11 @@ function vEnviar(u){
       <p class="muted">${env.length} gasto(s) por revisar. Los gastos quedan bloqueados hasta la revisión.</p>
       ${aut ? btnWa('avisar a ' + aut.nombre, aut.telefono, textoEnvio(u, per, env)) : ''}`;
   } else if(estado === 'autorizado'){
-    h += `<div class="alert ok">Autorizado el ${r.autorizado}. Pasó a contabilidad para finiquitar.</div><p class="total">${money(sum(todos))}</p>`;
+    h += `<div class="alert ok">${directo ? 'Enviado a contabilidad' : 'Autorizado'} el ${r.autorizado}. Pasó a contabilidad para finiquitar.</div><p class="total">${money(sum(todos))}</p>
+      ${directo && cont ? btnWa('avisar a contabilidad', cont.telefono, textoEnvio(u, per, todos)) : ''}`;
   } else if(estado === 'finiquitado'){
     h += `<div class="alert ok">Finiquitado por contabilidad el ${r.finiquitado}.</div><p class="total">${money(r.total)}</p>${resumenSaldo(u, r)}`;
-  } else if(!aut){
+  } else if(!aut && !directo){
     h += `<div class="alert">No tiene autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div>`;
   } else {
     const devueltos = todos.filter(g => g.estado === 'devuelto');
@@ -573,15 +574,15 @@ function vEnviar(u){
       const porC = {}; lista.forEach(g => porC[g.concepto] = (porC[g.concepto] || 0) + g.valor);
       h += `<p>${lista.length} gasto(s) ${estado === 'devuelto' ? 'corregidos ' : ''}por <b class="total">${money(sum(lista))}</b></p>
         ${lista.length ? tabla(Object.entries(porC).map(([k,v]) => `<tr><td>${nombreConcepto(k)}</td><td class="num">${money(v)}</td></tr>`).join('')) : ''}
-        <p class="muted">Lo autoriza: <b>${esc(aut.nombre)}</b> (${esc(aut.puesto)}). Al enviar, los gastos quedan bloqueados hasta la revisión.</p>
-        <button class="primary" onclick="enviarPeriodo()" ${lista.length ? '' : 'disabled'}>${estado === 'devuelto' ? 'Reenviar corregidos' : 'Enviar a autorización'}</button>`;
+        <p class="muted">${directo ? 'No tiene autorizador: al enviar, la comprobación pasa <b>directo a contabilidad</b>.' : `Lo autoriza: <b>${esc(aut.nombre)}</b> (${esc(aut.puesto)}).`} Al enviar, los gastos quedan bloqueados.</p>
+        <button class="primary" onclick="enviarPeriodo()" ${lista.length ? '' : 'disabled'}>${estado === 'devuelto' ? 'Reenviar corregidos' : directo ? 'Enviar a contabilidad' : 'Enviar a autorización'}</button>`;
     }
   }
   return h + '</div>';
 }
 function enviarPeriodo(){
   if(per === mesActual() && !confirm(`${mesNombre(per)} aún no termina. Normalmente se envía al cerrar el mes. ¿Enviar de todas formas?`)) return;
-  ejecutar(async () => { await rpc('enviar_periodo', {p_periodo: per}); await refrescar('Periodo enviado. Avise al autorizador por WhatsApp.'); });
+  ejecutar(async () => { await rpc('enviar_periodo', {p_periodo: per}); await refrescar(yo().sinAutorizador ? 'Enviado a contabilidad. Avise por WhatsApp.' : 'Periodo enviado. Avise al autorizador por WhatsApp.'); });
 }
 function resumenSaldo(u, r){
   if(u.pago === 'anticipo' && r.diferencia != null){
@@ -596,7 +597,7 @@ function resumenSaldo(u, r){
 
 /* ===== Anticipos ===== */
 function vAnticipos(u){
-  const abierto = anticipoAbierto(u), jefe = usuario(u.autoriza), cont = contabilidad();
+  const abierto = anticipoAbierto(u), jefe = usuario(u.autoriza), cont = contabilidad(), directo = u.sinAutorizador;
   const mios = db.anticipos.filter(a => a.userId === u.id).sort((a,b) => b.fecha.localeCompare(a.fecha));
   let h = `<div class="card"><h2>Solicitar anticipo</h2>`;
   if(abierto){
@@ -606,12 +607,14 @@ function vAnticipos(u){
       const t = `Solicitud de anticipo: ${money(abierto.monto)}. Motivo: ${abierto.motivo}. ${u.nombre}.`;
       h += (cont ? btnWa('avisar a contabilidad', cont.telefono, t) : '') + (jefe ? btnWa('avisar a ' + jefe.nombre, jefe.telefono, t + ' Pendiente de su autorización en TU comprobación.') : '');
     }
-  } else if(!jefe){
+    if(abierto.estado === 'autorizado' && directo && cont)
+      h += btnWa('avisar a contabilidad', cont.telefono, `Solicitud de anticipo: ${money(abierto.monto)}. Motivo: ${abierto.motivo}. ${u.nombre}. Favor depositar.`);
+  } else if(!jefe && !directo){
     h += `<div class="alert">No tiene jefe/autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div>`;
   } else {
     h += `<div class="row"><div><label>Monto (COP)</label><input id="am" type="number" min="0" inputmode="numeric"></div>
       <div><label>Motivo</label><input id="amo" placeholder="Ej.: gira Costa, 12 al 16 de noviembre"></div></div>
-      <p class="muted">Lo autoriza ${esc(jefe.nombre)}; luego contabilidad deposita y lo confirma en la app.</p>
+      <p class="muted">${directo ? 'No requiere autorización: pasa directo a contabilidad, que deposita y lo confirma en la app.' : `Lo autoriza ${esc(jefe.nombre)}; luego contabilidad deposita y lo confirma en la app.`}</p>
       <div class="acciones"><button class="primary" onclick="solicitarAnticipo()">Solicitar</button></div>`;
   }
   h += `</div><div class="card"><h2>Historial</h2>${tabla(`<tr><th>Fecha</th><th class="num">Monto</th><th>Motivo</th><th>Estado</th></tr>
@@ -802,8 +805,10 @@ function vUsuarios(u){
     </div>
     <div class="row">
       <div><label>Rol</label><select id="ur" onchange="ajustarUsuarioForm()">${Object.entries(ROLES).map(([k,l]) => `<option value="${k}" ${x.rol===k?'selected':''}>${l}</option>`).join('')}</select></div>
-      <div><label>Lo autoriza</label><select id="ua"><option value="">— Nadie —</option>${opcionesAut.map(a => `<option value="${a.id}" ${x.autoriza===a.id?'selected':''}>${esc(a.nombre)} (${esc(a.puesto)})</option>`).join('')}</select>
-        <p class="muted">Solo aparecen usuarios con rol Líder, Autorizador o Administrador.</p></div>
+      <div><label>Lo autoriza</label><select id="ua"><option value="">— Elegir —</option>
+        <option value="__directo" ${x.sinAutorizador?'selected':''}>Sin autorizador (va directo a contabilidad)</option>
+        ${opcionesAut.map(a => `<option value="${a.id}" ${x.autoriza===a.id?'selected':''}>${esc(a.nombre)} (${esc(a.puesto)})</option>`).join('')}</select>
+        <p class="muted">Aparecen usuarios con rol Líder, Autorizador o Administrador. "Sin autorizador" es para la cabeza de la empresa: sus comprobaciones y anticipos pasan directo a contabilidad.</p></div>
     </div>
     <div class="row">
       <div class="f-pago"><label>Tipo de pago</label><select id="upg" onchange="ajustarUsuarioForm()">
@@ -823,7 +828,7 @@ function vUsuarios(u){
         ${x.id !== u.id ? `<button class="danger" onclick="activar('${x.id}',${x.activo === false})">${x.activo === false ? 'Reactivar' : 'Desactivar'}</button>` : ''}` : ''}
     </div>
   </div>`;
-  const sinAut = activos().filter(y => puedeComprobar(y) && (!y.autoriza || usuario(y.autoriza)?.activo === false));
+  const sinAut = activos().filter(y => puedeComprobar(y) && !y.sinAutorizador && (!y.autoriza || usuario(y.autoriza)?.activo === false));
   setTimeout(() => x && ajustarUsuarioForm(), 0);
   return form + `<div class="card"><h2>Matriz de usuarios</h2>
     ${sinAut.length ? `<div class="alert">Sin autorizador asignado: ${sinAut.map(y => esc(y.nombre)).join(', ')}. No podrán enviar su comprobación.</div>` : ''}
@@ -831,7 +836,7 @@ function vUsuarios(u){
     ${tabla(`<tr><th>Nombre</th><th>Usuario</th><th>Puesto</th><th>Rol</th><th>Lo autoriza</th><th>Autoriza a</th><th>Pago</th><th>Centro</th><th class="num">Saldo</th><th></th></tr>
     ${db.usuarios.map(y => `<tr style="${y.activo === false ? 'opacity:.5' : ''}"><td>${esc(y.nombre)}${y.activo === false ? ' <span class="tag bad">inactivo</span>' : ''}${y.bloqueado ? ' <span class="tag bad">bloqueado</span>' : ''}</td>
       <td>${esc(y.login)}</td><td>${esc(y.puesto)}</td><td>${ROLES[y.rol]}</td>
-      <td>${esc(usuario(y.autoriza)?.nombre || '—')}</td><td>${autorizaA(y).map(z => esc(z.nombre)).join(', ') || '—'}</td>
+      <td>${y.sinAutorizador ? '<span class="muted">Directo a contabilidad</span>' : esc(usuario(y.autoriza)?.nombre || '—')}</td><td>${autorizaA(y).map(z => esc(z.nombre)).join(', ') || '—'}</td>
       <td>${PAGOS[y.pago] || '—'}</td><td>${esc(y.centro || '—')}</td>
       <td class="num">${y.pago === 'tarjeta' ? money(saldoTarjeta(y)) + '<br><span class="muted">de ' + money(y.credito) + '</span>' : y.pago === 'caja' ? money(disponibleCaja(y)) + '<br><span class="muted">de ' + money(y.montoCaja) + '</span>' : '—'}</td>
       <td><button class="ghost sm" onclick="editUser='${y.id}';render();window.scrollTo(0,0)">Editar</button></td></tr>`).join('')}`)}
@@ -854,7 +859,7 @@ document.addEventListener('input', e => { if(e.target.id === 'ul') e.target.data
 function guardarUsuario(){
   const rol = $('#ur').value, comprueba = ['vendedor','lider','caja'].includes(rol);
   const d = { nombre:$('#un').value.trim(), puesto:$('#up').value.trim(), telefono:$('#ut').value.trim(), rol,
-    autoriza:$('#ua').value || null, pago: rol === 'caja' ? 'caja' : comprueba ? $('#upg').value : null, centro:$('#uc').value || null,
+    autoriza:($('#ua').value && $('#ua').value !== '__directo') ? $('#ua').value : null, sin_autorizador: $('#ua').value === '__directo', pago: rol === 'caja' ? 'caja' : comprueba ? $('#upg').value : null, centro:$('#uc').value || null,
     credito:Number($('#ucr').value || 0), monto_caja:Number($('#umc').value || 0), encargado:$('#uen').value.trim() };
   const login = $('#ul').value.trim().toLowerCase();
   if(!d.nombre || !d.puesto) return toast('Nombre y puesto son obligatorios');

@@ -12,7 +12,7 @@ Versión 0.4 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes 
 | Contabilidad | Alta y edición de usuarios, matriz de autorización (quién autoriza a quién), restablecer contraseñas, confirmar depósito de anticipos, finiquitar periodo, registrar pago de tarjeta, exportar | Crear gastos ajenos |
 | Administrador | Políticas, centros de costos, cajas menores, dashboard | — |
 
-Los autorizadores no se fijan por nombre en la app: contabilidad los asigna en la matriz de usuarios. Pueden ser autorizadores los usuarios con rol Líder, Autorizador o Administrador. Nadie puede autorizarse a sí mismo. Un vendedor o líder sin autorizador asignado no puede enviar su periodo.
+Los autorizadores no se fijan por nombre en la app: contabilidad los asigna en la matriz de usuarios. Pueden ser autorizadores los usuarios con rol Líder, Autorizador o Administrador. Nadie puede autorizarse a sí mismo. Un vendedor o líder sin autorizador asignado no puede enviar su periodo, salvo que contabilidad lo marque como "Sin autorizador (va directo a contabilidad)", pensado para la cabeza de la empresa: al enviar, su comprobación queda aprobada y pasa a contabilidad, y sus anticipos quedan autorizados al solicitarlos.
 
 ## 2. Usuarios
 
