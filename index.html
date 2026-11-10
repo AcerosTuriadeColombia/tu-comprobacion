@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TU comprobación</title>
+<link rel="icon" type="image/png" href="logo-color.png">
 <script src="vendor/supabase.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <style>
@@ -11,6 +12,8 @@
   * { box-sizing: border-box; }
   body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:#1d2530; }
   header { background:var(--turia); color:#fff; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  .marca { display:flex; align-items:center; gap:12px; }
+  .marca img { height:40px; width:auto; display:block; }
   .logo { font-weight:800; font-size:20px; line-height:1; white-space:nowrap; }
   .logo b { color:var(--tu); }
   .logo .comp { color:var(--tu); font-weight:600; margin-left:6px; }
@@ -60,7 +63,7 @@
 </head>
 <body>
 <header>
-  <div class="logo"><b>TU</b>RIA<span class="comp">comprobación</span></div>
+  <div class="marca"><img src="logo-blanco.png" alt="Aceros Turia"><div class="logo"><b>TU</b>RIA<span class="comp">comprobación</span></div></div>
   <nav id="nav"></nav>
 </header>
 <main id="app"><div class="card muted">Cargando…</div></main>
@@ -276,6 +279,7 @@ function render(){
 function login(){
   $('#app').innerHTML = `
   <div class="card" style="max-width:380px;margin:40px auto">
+    <img src="logo-color.png" alt="Aceros Turia" style="display:block;height:90px;width:auto;margin:4px auto 14px">
     <h2>Ingresar</h2>
     <label>Usuario</label><input id="lu" autocomplete="username" autocapitalize="none">
     <label>Contraseña</label><input id="lp" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')entrar()">
