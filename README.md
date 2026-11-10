@@ -19,7 +19,7 @@ App de comprobación de gastos de Aceros Turia de Colombia S.A.S., conectada a S
 
 ## Puesta en marcha
 
-1. Publicar `index.html` y `vendor/` en una dirección web (ver abajo) o abrir `index.html` directamente para probar.
+1. La app se publica con GitHub Pages en https://acerosturiadecolombia.github.io/tu-comprobacion/ (Settings → Pages → Deploy from a branch → rama principal, carpeta `/ (root)`). Cada cambio subido a esa rama se publica solo en uno o dos minutos.
 2. La primera vez, la pantalla de ingreso muestra **Configuración inicial**: crear el usuario de contabilidad. La app muestra una contraseña temporal; al entrar pide cambiarla.
 3. Contabilidad da de alta a los demás en **Usuarios** y define quién autoriza a quién.
 
