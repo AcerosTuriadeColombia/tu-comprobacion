@@ -1,6 +1,6 @@
 # TU comprobación — Reglas, condiciones y flujo de trabajo
 
-Versión 0.3 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
+Versión 0.4 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
 
 ## 1. Roles
 
@@ -49,7 +49,7 @@ Conceptos: Desayuno, Almuerzo, Comida con cliente, Café con cliente, Peaje, Com
 ## 5. Comprobantes
 
 - Se adjunta la imagen del ticket y se captura el valor total.
-- La app lee fecha y valor de la imagen como sugerencia; la persona confirma antes de guardar. (Pendiente para producción; en el prototipo se capturan a mano.)
+- La app lee fecha y valor de la imagen como sugerencia; la persona confirma antes de guardar. (Pendiente; por ahora se capturan a mano.)
 - Casilla "factura enviada al correo de la empresa".
 - Pagos en efectivo permitidos cuando el lugar no acepta tarjeta (peajes, parqueaderos y similares). Se marca el medio de pago por gasto.
 - Las cajas menores llevan foto por cada gasto.
@@ -103,4 +103,5 @@ Plazo de radicación: los primeros 5 días del mes. La app avisa cuando se acerc
 - Monto definitivo de cada caja menor (hoy 2.000.000 COP).
 - Política de montos por concepto y rol (inventario). El administrador ya puede cargar topes por concepto en Políticas.
 - Formato exacto que pide contabilidad para el ERP.
-- Repositorio nuevo en GitHub + proyecto Supabase.
+- Publicar la app en una dirección web para los usuarios (el repositorio y el proyecto Supabase ya existen).
+- Lectura automática de fecha y valor del ticket.

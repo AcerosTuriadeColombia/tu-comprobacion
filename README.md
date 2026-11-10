@@ -1,26 +1,29 @@
 # TU comprobación
 
-App de comprobación de gastos de Aceros Turia de Colombia S.A.S.
+App de comprobación de gastos de Aceros Turia de Colombia S.A.S., conectada a Supabase (proyecto "TU comprobacion", organización Aceros Turia de Colombia).
 
-- `index.html`: prototipo funcional. Abrir directo en el navegador (doble clic). Los datos y las fotos quedan en el navegador de ese equipo (`localStorage`), así que cada equipo ve sus propios datos de prueba.
-- `vendor/jszip.min.js`: librería para generar el ZIP de exportación (sin depender de internet).
-- `REGLAS-Y-FLUJO.md`: roles, reglas de gasto, ciclo mensual y pendientes antes de producción.
+## Archivos
 
-## Usuarios de prueba
+- `index.html`: la app completa (una sola página). Debe publicarse junto con la carpeta `vendor/`.
+- `vendor/`: librerías locales (supabase-js 2.58.0 y JSZip 3.10.1), para no depender de CDNs.
+- `supabase/migrations/`: esquema de la base (tablas, permisos, reglas del flujo).
+- `supabase/functions/admin-usuarios/`: función de servidor para crear usuarios y restablecer contraseñas.
+- `REGLAS-Y-FLUJO.md`: roles, reglas de gasto, ciclo mensual y pendientes.
 
-Contraseña de todos: `demo`.
+## Cómo está armada
 
-| Usuario | Rol | Notas |
-|---|---|---|
-| contabilidad | Contabilidad | Alta de usuarios, matriz de autorización, anticipos, finiquito, exportación |
-| admin | Administrador | Dashboard, topes por concepto, centros de costos |
-| autorizador | Autorizador | Autoriza al líder y a la caja menor |
-| lider | Líder | Pago por anticipo; autoriza al vendedor |
-| vendedor | Vendedor | Tarjeta de crédito; trae 2 gastos del mes anterior |
-| caja.amaga | Caja menor | Planta Amagá, monto fijo 2.000.000 |
+- **Usuarios**: Supabase Auth. Cada persona entra con un usuario (ej. `ana.gomez`); internamente su correo es `ana.gomez@usuarios.tucomprobacion.app`, que no recibe correos. Solo contabilidad crea usuarios y restablece contraseñas, mediante la función `admin-usuarios`.
+- **Datos**: tablas `perfiles`, `gastos`, `periodos`, `anticipos`, `topes`, `centros`. La app solo lee las tablas; toda escritura pasa por funciones de la base (`guardar_gasto`, `enviar_periodo`, `resolver_gastos`, `finiquitar`, etc.) que validan las reglas del flujo. Nadie puede saltárselas desde el navegador.
+- **Quién ve qué**: cada persona ve lo suyo; un autorizador ve lo de las personas que tiene asignadas; contabilidad y administración ven todo.
+- **Fotos**: bucket privado `tickets`, ruta `<usuario>/<gasto>.jpg`. Se ven con enlaces temporales. Se borran al finiquitar el periodo.
 
-Para volver a empezar con los datos de prueba, borrar los datos del sitio en el navegador.
+## Puesta en marcha
 
-## Producción
+1. Publicar `index.html` y `vendor/` en una dirección web (ver abajo) o abrir `index.html` directamente para probar.
+2. La primera vez, la pantalla de ingreso muestra **Configuración inicial**: crear el usuario de contabilidad. La app muestra una contraseña temporal; al entrar pide cambiarla.
+3. Contabilidad da de alta a los demás en **Usuarios** y define quién autoriza a quién.
 
-Prevista en Supabase: Auth (usuarios y contraseñas), tablas, Storage para fotos de tickets y lectura automática de fecha y valor del ticket.
+## Recomendado en el panel de Supabase
+
+- Authentication → Sign In / Providers → Email: desactivar "Allow new users to sign up" (los usuarios solo los crea contabilidad).
+- Authentication → Policies (o Password security): longitud mínima 8 y exigir letras y dígitos, para que el servidor aplique la misma regla que la app.

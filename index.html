@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TU comprobación</title>
+<script src="vendor/supabase.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <style>
   :root { --turia:#0b3d6b; --tu:#f29a1f; --bg:#f4f6f9; --card:#fff; --line:#dde3ea; --ok:#1f8a4c; --warn:#b26a00; --bad:#b3261e; }
@@ -25,6 +26,7 @@
   label.ck { display:flex; gap:8px; align-items:flex-start; color:#1d2530; font-size:14px; }
   label.ck input { width:auto; margin-top:3px; }
   input, select, textarea { width:100%; padding:9px; border:1px solid var(--line); border-radius:6px; font-size:15px; font-family:inherit; }
+  input:disabled { background:#f0f2f5; color:#6b7787; }
   .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   @media (max-width:600px) { .row { grid-template-columns:1fr; } }
   button { font-family:inherit; }
@@ -50,9 +52,10 @@
   .thumb { width:44px; height:44px; object-fit:cover; border-radius:4px; cursor:pointer; border:1px solid var(--line); display:block; }
   .bar { height:8px; background:var(--turia); border-radius:4px; min-width:2px; }
   .hidden { display:none !important; }
-  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#1d2530; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; z-index:20; max-width:92vw; }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#1d2530; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; z-index:30; max-width:92vw; }
   #modal { position:fixed; inset:0; background:rgba(0,0,0,.8); display:flex; align-items:center; justify-content:center; z-index:10; cursor:zoom-out; }
   #modal img { max-width:95vw; max-height:92vh; border-radius:6px; }
+  #busy { position:fixed; inset:0; background:rgba(244,246,249,.6); display:flex; align-items:center; justify-content:center; z-index:20; font-size:15px; color:var(--turia); font-weight:600; }
 </style>
 </head>
 <body>
@@ -60,12 +63,18 @@
   <div class="logo">Turia<b>TU</b><small>comprobación</small></div>
   <nav id="nav"></nav>
 </header>
-<main id="app"></main>
+<main id="app"><div class="card muted">Cargando…</div></main>
 <div id="toast" class="toast hidden"></div>
+<div id="busy" class="hidden">Procesando…</div>
 <div id="modal" class="hidden" onclick="this.classList.add('hidden')"><img alt="Ticket"></div>
 
 <script>
-/* PROTOTIPO: datos y fotos en localStorage de este navegador. Producción = Supabase Auth + tablas + Storage. */
+/* ===== Conexión (la llave publicable es pública por diseño; la seguridad está en RLS y funciones del servidor) ===== */
+const SB_URL = 'https://msxmdesnrqjiajvhlwop.supabase.co';
+const SB_KEY = 'sb_publishable_G7idBQGtjoQvEfKK81qz9Q_PzCMRn7G';
+const DOMINIO = 'usuarios.tucomprobacion.app';  // correo interno de cada usuario: <usuario>@DOMINIO
+const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, storageKey: 'tuc-auth' } });
+
 const CONCEPTOS = [
   {id:'desayuno', nombre:'Desayuno', comidaIndividual:true},
   {id:'almuerzo', nombre:'Almuerzo', comidaIndividual:true},
@@ -83,19 +92,18 @@ const MEDIOS = {tarjeta:'Tarjeta', efectivo:'Efectivo', anticipo:'Anticipo', caj
 const ESTADO_PER = {abierto:'abierto', enviado:'en revisión', devuelto:'devuelto', autorizado:'autorizado', finiquitado:'finiquitado'};
 const ESTADO_ANT = {solicitado:'solicitado', autorizado:'autorizado por jefe', rechazado:'rechazado', depositado:'depositado', comprobado:'comprobado'};
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-const KEY = 'tuc3', ACT = 'tuc3_act';
+const ACT = 'tuc_act';
 const INACTIVIDAD = 30*60*1000;   // 30 minutos
 const DIA_LIMITE = 5;             // radicación: primeros 5 días del mes
 const DIAS_CLAVE = 90;            // cambio de contraseña cada 90 días
-const MAX_INTENTOS = 5;
 
-/* ---- utilidades ---- */
+/* ===== Utilidades ===== */
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => '$ ' + Math.round(Number(n||0)).toLocaleString('es-CO');
-const hoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+const hoy = () => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Bogota'}).format(new Date());
 const mesActual = () => hoy().slice(0,7);
-function mesAnterior(p = mesActual()){ let [y,m] = p.split('-').map(Number); m--; if(!m){ m=12; y--; } return `${y}-${String(m).padStart(2,'0')}`; }
+function mesAnterior(p = mesActual(), n = 1){ let [y,m] = p.split('-').map(Number); m -= n; while(m < 1){ m += 12; y--; } return `${y}-${String(m).padStart(2,'0')}`; }
 function mesNombre(p){ const [y,m] = p.split('-').map(Number); return `${MESES[m-1]} ${y}`; }
 function ultimoDia(p){ const [y,m] = p.split('-').map(Number); return `${p}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`; }
 const diasDesde = f => Math.floor((Date.now() - new Date(f + 'T00:00:00').getTime()) / 86400000);
@@ -103,44 +111,76 @@ const sum = (arr, f = x => x.valor) => arr.reduce((s, x) => s + Number(f(x) || 0
 const concepto = id => CONCEPTOS.find(c => c.id === id) || {id, nombre:id};
 const nombreConcepto = id => concepto(id).nombre;
 const tabla = html => `<div class="tw"><table>${html}</table></div>`;
-function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hidden'), 3000); }
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hidden'), 3500); }
+function uuid(){ if(crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  const h = [...b].map(x => x.toString(16).padStart(2,'0')).join(''); return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`; }
 function wa(tel, texto){
   const n = String(tel || '').replace(/\D/g, '');
   const num = n ? (n.length === 10 ? '57' + n : n) : '';
   return `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
 }
 const btnWa = (etiqueta, tel, texto) => `<a class="wa" target="_blank" rel="noopener" href="${wa(tel, texto)}">WhatsApp: ${esc(etiqueta)}</a>`;
+const emailDe = login => `${login}@${DOMINIO}`;
 
-/* ---- datos ---- */
-function nuevoUsuario(d){ return {autoriza:null, pago:null, centro:null, credito:0, montoCaja:0, encargado:'', telefono:'',
-  password:'demo', cambiarClave:false, claveFecha:hoy(), intentos:0, bloqueado:false, activo:true, ...d}; }
-function semilla(){
-  const ant = mesAnterior();
-  return {
-    /* Usuarios de ejemplo. En uso real, contabilidad da de alta a todos y define quién autoriza a quién. */
-    usuarios: [
-      nuevoUsuario({id:'c1', login:'contabilidad', nombre:'Contabilidad', rol:'contabilidad', puesto:'Contador'}),
-      nuevoUsuario({id:'a1', login:'admin', nombre:'Administrador', rol:'admin', puesto:'Administración'}),
-      nuevoUsuario({id:'u1', login:'autorizador', nombre:'Autorizador Demo', rol:'autorizador', puesto:'Autorizador', centro:'Comercial'}),
-      nuevoUsuario({id:'u3', login:'lider', nombre:'Líder Demo', rol:'lider', puesto:'Líder comercial', autoriza:'u1', pago:'anticipo', centro:'Comercial'}),
-      nuevoUsuario({id:'u2', login:'vendedor', nombre:'Vendedor Demo', rol:'vendedor', puesto:'Vendedor', autoriza:'u3', pago:'tarjeta', centro:'Comercial', credito:4000000}),
-      nuevoUsuario({id:'k1', login:'caja.amaga', nombre:'Caja menor Planta Amagá', rol:'caja', puesto:'Caja menor', autoriza:'u1', pago:'caja', centro:'Planta Amagá', montoCaja:2000000, encargado:'Por definir'}),
-    ],
-    gastos: [
-      {id:'g1', userId:'u2', periodo:ant, fecha:ant+'-03', concepto:'comida_cliente', valor:184000, centro:'Comercial', empresa:'HomeCenter', personas:'Compras', cliente:true, nPersonas:3, medio:'tarjeta', estado:'borrador', comentario:'', devolucion:'', factura:true, foto:null},
-      {id:'g2', userId:'u2', periodo:ant, fecha:ant+'-04', concepto:'peaje', valor:21500, centro:'Comercial', medio:'efectivo', estado:'borrador', comentario:'', devolucion:'', foto:null},
-    ],
-    periodos: [],
-    anticipos: [],
-    topes: {},  // vacío hasta recibir la política de inventario
-    centros: ['Planta Amagá','Planta Malambo','Comercial'],
-    sesion: null,
-  };
-}
-function load(){ try { const s = localStorage.getItem(KEY); if(s) return JSON.parse(s); } catch(e){} return semilla(); }
-function save(){ localStorage.setItem(KEY, JSON.stringify(db)); }
-let db = load();
+/* ===== Datos (Supabase) ===== */
+let db = {usuarios:[], gastos:[], periodos:[], anticipos:[], topes:{}, centros:[], sesion:null};
+let fotoUrls = {};          // ruta de la foto -> URL firmada
 let vista = 'inicio', per = null, editId = null, editUser = null, aviso = null, dper = null;
+let nuevoGastoId = null, subidas = new Set();
+
+const mapU = r => ({id:r.id, login:r.login, nombre:r.nombre, puesto:r.puesto, rol:r.rol, autoriza:r.autoriza, pago:r.pago, centro:r.centro,
+  credito:Number(r.credito), montoCaja:Number(r.monto_caja), encargado:r.encargado, telefono:r.telefono, activo:r.activo, bloqueado:r.bloqueado,
+  cambiarClave:r.cambiar_clave, claveFecha:r.clave_fecha});
+const mapG = r => ({id:r.id, userId:r.user_id, periodo:r.periodo, fecha:r.fecha, concepto:r.concepto, valor:Number(r.valor), centro:r.centro, medio:r.medio,
+  empresa:r.empresa, personas:r.personas, nPersonas:r.n_personas, cliente:r.cliente, fuera:r.fuera, factura:r.factura, comentario:r.comentario,
+  devolucion:r.devolucion, estado:r.estado, corregido:r.corregido, fotoPath:r.foto_path, fotoArchivada:r.foto_archivada});
+const num = v => v == null ? null : Number(v);
+const mapP = r => ({userId:r.user_id, periodo:r.periodo, estado:r.estado, enviado:r.enviado, envios:r.envios, autorizado:r.autorizado,
+  finiquitado:r.finiquitado, exportado:r.exportado, total:num(r.total), anticipo:num(r.anticipo), diferencia:num(r.diferencia)});
+const mapA = r => ({id:r.id, userId:r.user_id, monto:Number(r.monto), motivo:r.motivo, estado:r.estado, fecha:r.fecha, autorizado:r.autorizado,
+  autorizadoPor:r.autorizado_por, rechazo:r.rechazo, depositado:r.depositado, periodo:r.periodo});
+
+async function todo(q){ // trae todas las filas, de 1000 en 1000
+  const out = [];
+  for(let i = 0; ; i += 1000){
+    const {data, error} = await q().range(i, i + 999);
+    if(error) throw new Error(error.message);
+    out.push(...data); if(data.length < 1000) return out;
+  }
+}
+async function cargar(){
+  const desde = mesAnterior(mesActual(), 12);
+  const [u, g, p, a, t, c] = await Promise.all([
+    todo(() => sb.from('perfiles').select('*').order('nombre')),
+    todo(() => sb.from('gastos').select('*').or(`estado.neq.pagado,periodo.gte.${desde}`).order('fecha')),
+    todo(() => sb.from('periodos').select('*')),
+    todo(() => sb.from('anticipos').select('*').order('fecha')),
+    todo(() => sb.from('topes').select('*')),
+    todo(() => sb.from('centros').select('*').order('nombre')),
+  ]);
+  db.usuarios = u.map(mapU); db.gastos = g.map(mapG); db.periodos = p.map(mapP); db.anticipos = a.map(mapA);
+  db.topes = Object.fromEntries(t.map(x => [x.concepto, Number(x.valor)])); db.centros = c.map(x => x.nombre);
+  const faltan = db.gastos.filter(x => x.fotoPath && !fotoUrls[x.fotoPath]).map(x => x.fotoPath);
+  for(let i = 0; i < faltan.length; i += 100){
+    const {data} = await sb.storage.from('tickets').createSignedUrls(faltan.slice(i, i + 100), 4 * 3600);
+    (data || []).forEach(d => { if(d.signedUrl && d.path) fotoUrls[d.path] = d.signedUrl; });
+  }
+}
+function limpiarError(m){ return String(m || 'Error').replace(/^.*?ERROR:\s*/,''); }
+async function rpc(fn, args = {}){ const {data, error} = await sb.rpc(fn, args); if(error) throw new Error(limpiarError(error.message)); return data; }
+async function adminUsuarios(body){
+  const {data, error} = await sb.functions.invoke('admin-usuarios', {body});
+  if(error){ let m = error.message; try { m = (await error.context.json()).error || m; } catch(e){} throw new Error(m); }
+  return data;
+}
+async function ejecutar(fn){
+  $('#busy').classList.remove('hidden');
+  try { await fn(); }
+  catch(e){ console.error(e); toast(e.message === 'Failed to fetch' ? 'Sin conexión. Intente de nuevo.' : e.message); }
+  finally { $('#busy').classList.add('hidden'); }
+}
+async function refrescar(msg){ await cargar(); if(validarSesion()) { render(); if(msg) toast(msg); } }
 
 const usuario = id => db.usuarios.find(u => u.id === id);
 const yo = () => usuario(db.sesion);
@@ -170,21 +210,36 @@ function periodosDe(u){
   return [...s].sort().reverse().slice(0, 8);
 }
 function selectorPeriodo(u){
-  return `<label>Periodo</label><select onchange="per=this.value;editId=null;render()">${periodosDe(u).map(p =>
+  return `<label>Periodo</label><select onchange="per=this.value;editId=null;nuevoGastoId=null;render()">${periodosDe(u).map(p =>
     `<option value="${p}" ${p===per?'selected':''}>${mesNombre(p)} · ${ESTADO_PER[estadoPer(u.id,p)]}</option>`).join('')}</select>`;
 }
 
-/* ---- sesión e inactividad ---- */
+/* ===== Sesión e inactividad ===== */
 function tocar(){ try { localStorage.setItem(ACT, String(Date.now())); } catch(e){} }
 ['click','keydown','touchstart'].forEach(ev => document.addEventListener(ev, () => { if(db.sesion) tocar(); }, {passive:true}));
-function revisarInactividad(){
-  if(!db.sesion) return;
-  const t = Number(localStorage.getItem(ACT) || 0);
-  if(Date.now() - t > INACTIVIDAD){ db.sesion = null; save(); vista = 'inicio'; render(); toast('Sesión cerrada por 30 minutos de inactividad'); }
+function inactivo(){ return Date.now() - Number(localStorage.getItem(ACT) || 0) > INACTIVIDAD; }
+async function cerrarSesion(msg){
+  db = {usuarios:[], gastos:[], periodos:[], anticipos:[], topes:{}, centros:[], sesion:null}; fotoUrls = {};
+  vista = 'inicio'; per = null; editId = null; editUser = null; aviso = null;
+  await sb.auth.signOut().catch(() => {});
+  render(); if(msg) toast(msg);
 }
-setInterval(revisarInactividad, 30000);
+setInterval(() => { if(db.sesion && inactivo()) cerrarSesion('Sesión cerrada por 30 minutos de inactividad'); }, 30000);
+function validarSesion(){
+  const u = yo();
+  if(!u){ cerrarSesion('Su usuario no tiene perfil. Consulte con contabilidad.'); return false; }
+  if(u.bloqueado){ cerrarSesion('Usuario bloqueado. Pida a contabilidad que lo desbloquee.'); return false; }
+  if(u.activo === false){ cerrarSesion('Usuario inactivo. Consulte con contabilidad.'); return false; }
+  return true;
+}
+async function iniciarSesion(){
+  const {data:{user}} = await sb.auth.getUser();
+  db.sesion = user.id; await cargar();
+  if(!validarSesion()) return;
+  per = periodoDefecto(yo()); vista = 'inicio'; tocar(); render();
+}
 
-/* ---- navegación ---- */
+/* ===== Navegación ===== */
 function renderNav(){
   const u = yo();
   if(!u){ $('#nav').innerHTML = ''; return; }
@@ -197,15 +252,15 @@ function renderNav(){
     if(autorizaA(u).length){ const n = pendientesAutorizar(u); items.push(['autorizar', 'Autorizar' + (n ? `<span class="badge">${n}</span>` : '')]); }
     if(u.rol === 'contabilidad') items.push(['contab','Contabilidad'], ['usuarios','Usuarios']);
     if(u.rol === 'admin') items.push(['dashboard','Dashboard'], ['politicas','Políticas']);
-    items.push(['clave','Contraseña'], ['salir','Salir']);
+    items.push(['actualizar','Actualizar'], ['clave','Contraseña'], ['salir','Salir']);
   }
   $('#nav').innerHTML = items.map(([k,l]) => `<button class="${vista===k?'on':''}" onclick="ir('${k}')">${l}</button>`).join('');
 }
 function ir(v){
-  aviso = null; editId = null; editUser = null;
-  if(v === 'salir'){ db.sesion = null; save(); vista = 'inicio'; }
-  else vista = v;
-  render(); window.scrollTo(0,0);
+  aviso = null; editId = null; editUser = null; nuevoGastoId = null;
+  if(v === 'salir') return cerrarSesion();
+  if(v === 'actualizar') return ejecutar(() => refrescar('Datos actualizados'));
+  vista = v; render(); window.scrollTo(0,0);
 }
 function render(){
   renderNav();
@@ -217,7 +272,7 @@ function render(){
   $('#app').innerHTML = (aviso ? `<div class="card alert ok">${aviso}</div>` : '') + fn(u);
 }
 
-/* ---- acceso ---- */
+/* ===== Acceso ===== */
 function login(){
   $('#app').innerHTML = `
   <div class="card" style="max-width:380px;margin:40px auto">
@@ -226,21 +281,46 @@ function login(){
     <label>Contraseña</label><input id="lp" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')entrar()">
     <div class="acciones"><button class="primary" onclick="entrar()">Entrar</button></div>
     <p class="muted">¿Olvidó su contraseña? Pida a contabilidad que la restablezca.</p>
-    <p class="muted">Usuarios demo (contraseña <b>demo</b>): contabilidad, admin, autorizador, lider, vendedor, caja.amaga</p>
-  </div>`;
+  </div><div id="inicial"></div>`;
+  sb.rpc('hay_usuarios').then(({data, error}) => {
+    if(error || data || !$('#inicial')) return;
+    $('#inicial').innerHTML = `<div class="card" style="max-width:420px;margin:0 auto">
+      <h2>Configuración inicial</h2>
+      <p class="muted">Aún no hay usuarios. Cree el usuario de contabilidad, que luego dará de alta a los demás.</p>
+      <label>Nombre</label><input id="in" value="Contabilidad">
+      <label>Puesto</label><input id="ip" value="Contador">
+      <label>Usuario para ingresar</label><input id="il" value="contabilidad" autocapitalize="none">
+      <label>Celular (WhatsApp)</label><input id="it" inputmode="tel" placeholder="3001234567">
+      <div class="acciones"><button class="primary" onclick="configuracionInicial()">Crear usuario de contabilidad</button></div></div>`;
+  });
+}
+function configuracionInicial(){
+  ejecutar(async () => {
+    const r = await adminUsuarios({accion:'inicial', login:$('#il').value, datos:{nombre:$('#in').value, puesto:$('#ip').value, telefono:$('#it').value}});
+    alert(`Usuario de contabilidad creado.\nUsuario: ${r.login}\nContraseña temporal: ${r.clave}\nAnótela: deberá cambiarla al ingresar.`);
+    login(); $('#lu').value = r.login;
+  });
 }
 function entrar(){
-  const login = $('#lu').value.trim().toLowerCase();
-  const u = db.usuarios.find(x => x.login === login);
-  if(!u) return toast('Usuario o contraseña incorrectos');
-  if(u.activo === false) return toast('Usuario inactivo. Consulte con contabilidad.');
-  if(u.bloqueado) return toast('Usuario bloqueado. Pida a contabilidad que lo desbloquee.');
-  if($('#lp').value !== u.password){
-    u.intentos = (u.intentos || 0) + 1;
-    if(u.intentos >= MAX_INTENTOS){ u.bloqueado = true; save(); return toast('Usuario bloqueado por 5 intentos fallidos. Contabilidad debe desbloquearlo.'); }
-    save(); return toast(`Contraseña incorrecta. Le quedan ${MAX_INTENTOS - u.intentos} intento(s).`);
-  }
-  u.intentos = 0; db.sesion = u.id; per = periodoDefecto(u); vista = 'inicio'; tocar(); save(); render();
+  const login = $('#lu').value.trim().toLowerCase(), clave = $('#lp').value;
+  if(!login || !clave) return toast('Escriba usuario y contraseña');
+  ejecutar(async () => {
+    const {error} = await sb.auth.signInWithPassword({email: emailDe(login), password: clave});
+    if(error){
+      if(/invalid login credentials/i.test(error.message)){
+        await sb.rpc('login_fallido', {p_login: login});
+        throw new Error('Usuario o contraseña incorrectos. A los 5 intentos fallidos el usuario se bloquea.');
+      }
+      throw new Error(error.message);
+    }
+    const est = await rpc('login_ok');
+    if(est !== 'ok'){
+      await sb.auth.signOut();
+      throw new Error(est === 'bloqueado' ? 'Usuario bloqueado. Pida a contabilidad que lo desbloquee.'
+        : est === 'inactivo' ? 'Usuario inactivo. Consulte con contabilidad.' : 'Su usuario no tiene perfil. Consulte con contabilidad.');
+    }
+    await iniciarSesion();
+  });
 }
 function vClave(u, forzado){
   return `<div class="card" style="max-width:420px;margin:20px auto">
@@ -255,15 +335,20 @@ function vClave(u, forzado){
 }
 function guardarClave(){
   const u = yo(), a = $('#ca').value, n = $('#cn').value;
-  if(a !== u.password) return toast('La contraseña actual no coincide');
   if(!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(n)) return toast('Mínimo 8 caracteres, con letras y números');
   if(n === a) return toast('La nueva contraseña debe ser distinta');
   if(n !== $('#cc').value) return toast('La confirmación no coincide');
-  u.password = n; u.cambiarClave = false; u.claveFecha = hoy(); save();
-  vista = 'inicio'; toast('Contraseña actualizada'); render();
+  ejecutar(async () => {
+    const {error: e1} = await sb.auth.signInWithPassword({email: emailDe(u.login), password: a});
+    if(e1) throw new Error('La contraseña actual no coincide');
+    const {error: e2} = await sb.auth.updateUser({password: n});
+    if(e2) throw new Error(e2.message);
+    await rpc('clave_cambiada');
+    vista = 'inicio'; await refrescar('Contraseña actualizada');
+  });
 }
 
-/* ---- inicio ---- */
+/* ===== Inicio ===== */
 function pendientesAutorizar(u){
   const mios = autorizaA(u).map(x => x.id);
   return db.periodos.filter(p => p.estado === 'enviado' && mios.includes(p.userId)).length
@@ -282,16 +367,17 @@ function vInicio(u){
       h += dia <= DIA_LIMITE
         ? `<div class="alert">Radique la comprobación de <b>${mesNombre(ant)}</b> antes del día ${DIA_LIMITE}. Tiene ${nAnt} gasto(s) sin enviar.</div>`
         : `<div class="alert bad">La comprobación de <b>${mesNombre(ant)}</b> está vencida (plazo: día ${DIA_LIMITE}). Envíela cuanto antes.</div>`;
-      h += `<button class="primary" onclick="per='${ant}';ir('enviar')">Enviar ${mesNombre(ant)}</button>`;
+      h += `<button class="primary" onclick="ir('enviar');per='${ant}';render()">Enviar ${mesNombre(ant)}</button>`;
     }
     db.periodos.filter(p => p.userId === u.id && p.estado === 'devuelto').forEach(p => {
       h += `<div class="alert bad">Tiene gastos devueltos en <b>${mesNombre(p.periodo)}</b>. Corríjalos y reenvíe.
-        <div class="acciones"><button class="ghost" onclick="per='${p.periodo}';ir('gastos')">Ver devueltos</button></div></div>`;
+        <div class="acciones"><button class="ghost" onclick="ir('gastos');per='${p.periodo}';render()">Ver devueltos</button></div></div>`;
     });
+    if(!usuario(u.autoriza)) h += `<div class="alert">No tiene autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div>`;
     const p = mesActual(), mis = gastosDe(u.id, p);
     h += `<h3>${mesNombre(p)} ${tagEstado(estadoPer(u.id, p))}</h3><p class="total">${money(sum(mis))}</p>
       <p class="muted">${mis.length} gasto(s) registrados · radicación en los primeros ${DIA_LIMITE} días del mes siguiente.</p>
-      <div class="acciones"><button class="primary" onclick="per='${p}';ir('gastos')">Registrar gasto</button></div>`;
+      <div class="acciones"><button class="primary" onclick="ir('gastos');per='${p}';render()">Registrar gasto</button></div>`;
   }
   h += '</div>';
   if(autorizaA(u).length){
@@ -302,23 +388,24 @@ function vInicio(u){
   if(u.rol === 'contabilidad'){
     const aut = db.periodos.filter(p => p.estado === 'autorizado').length;
     const dep = db.anticipos.filter(a => a.estado === 'autorizado').length;
-    h += `<div class="card"><h2>Contabilidad</h2><p>${aut} periodo(s) por finiquitar · ${dep} anticipo(s) por depositar</p>
-      <button class="primary" onclick="ir('contab')">Ir a contabilidad</button></div>`;
+    h += `<div class="card"><h2>Contabilidad</h2><p>${aut} periodo(s) por finiquitar · ${dep} anticipo(s) por depositar · ${db.usuarios.length} usuario(s)</p>
+      <div class="acciones"><button class="primary" onclick="ir('contab')">Ir a contabilidad</button><button class="ghost" onclick="ir('usuarios')">Usuarios</button></div></div>`;
   }
   if(u.rol === 'admin') h += `<div class="card"><h2>Administración</h2><button class="primary" onclick="ir('dashboard')">Ver dashboard</button></div>`;
   return h;
 }
 
-/* ---- gastos ---- */
+/* ===== Gastos ===== */
 function editable(u, g){
   const e = estadoPer(u.id, g.periodo);
   return (e === 'abierto' && g.estado === 'borrador') || (e === 'devuelto' && ['devuelto','borrador'].includes(g.estado));
 }
 function thumb(g){
-  if(g.foto) return `<img class="thumb" src="${g.foto}" alt="Ticket" onclick="verFoto('${g.id}')">`;
-  return `<span class="muted">${g.fotoArchivada ? 'archivada' : 'sin foto'}</span>`;
+  const url = g.fotoPath && fotoUrls[g.fotoPath];
+  if(url) return `<img class="thumb" src="${esc(url)}" alt="Ticket" loading="lazy" onclick="verFoto('${g.id}')">`;
+  return `<span class="muted">${g.fotoArchivada ? 'archivada' : g.fotoPath ? 'foto' : 'sin foto'}</span>`;
 }
-function verFoto(id){ const g = db.gastos.find(x => x.id === id); if(!g?.foto) return; $('#modal img').src = g.foto; $('#modal').classList.remove('hidden'); }
+function verFoto(id){ const g = db.gastos.find(x => x.id === id), url = g && fotoUrls[g.fotoPath]; if(!url) return; $('#modal img').src = url; $('#modal').classList.remove('hidden'); }
 
 function vGastos(u){
   if(!per) per = periodoDefecto(u);
@@ -347,7 +434,6 @@ function vGastos(u){
       </tr>`).join('') || '<tr><td colspan="8" class="muted">Sin gastos</td></tr>'}`)}
   </div>`;
 }
-
 function opcionesMedio(u){
   if(u.pago === 'caja') return {caja:'Caja menor (efectivo)'};
   if(u.pago === 'anticipo') return {anticipo:'Efectivo del anticipo', tarjeta:'Tarjeta de crédito'};
@@ -371,13 +457,13 @@ function formGasto(u, g){
   <div class="row">
     <div><label>Medio de pago</label><select id="gm">${Object.entries(opcionesMedio(u)).map(([k,l]) => `<option value="${k}" ${g.medio===k?'selected':''}>${l}</option>`).join('')}</select></div>
     <div><label>Foto del ticket</label><input id="gfoto" type="file" accept="image/*" capture="environment">
-      <p class="muted">${g.foto ? 'Ya tiene foto guardada; suba otra solo si quiere reemplazarla.' : 'Obligatoria. Toque para tomar la foto.'}</p></div>
+      <p class="muted">${g.fotoPath ? 'Ya tiene foto guardada; suba otra solo si quiere reemplazarla.' : 'Obligatoria. Toque para tomar la foto.'}</p></div>
   </div>
   <div id="extras">${extrasHtml(c, g)}</div>
   <div id="avisoTope">${avisoTopeHtml(c, g.valor, g.nPersonas, g.comentario)}</div>
   <label class="ck"><input id="gfact" type="checkbox" ${g.factura?'checked':''}> Factura ya enviada al correo de la empresa</label>
   <p class="muted">No se reconocen: licor, gastos personales ni antojos de media mañana o tarde.</p>
-  <div class="acciones"><button class="primary" id="btnGuardar" onclick="guardarGasto()">${editId ? 'Guardar cambios' : 'Guardar gasto'}</button>
+  <div class="acciones"><button class="primary" onclick="guardarGasto()">${editId ? 'Guardar cambios' : 'Guardar gasto'}</button>
     ${editId ? `<button class="ghost" onclick="editId=null;render()">Cancelar</button>` : ''}</div>`;
 }
 function extrasHtml(c, g = {}){
@@ -400,31 +486,32 @@ function validarTope(){
   const c = concepto($('#gc').value), prev = $('#gcom')?.value || '';
   $('#avisoTope').innerHTML = avisoTopeHtml(c, $('#gv').value, $('#gn')?.value, prev);
 }
-function comprimir(file, max = 1100, q = 0.6){
+function comprimir(file, max = 1400, q = 0.7){
   return new Promise((res, rej) => {
     const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => {
       const k = Math.min(1, max / Math.max(img.width, img.height));
       const cv = document.createElement('canvas'); cv.width = Math.round(img.width*k); cv.height = Math.round(img.height*k);
       cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
-      res(cv.toDataURL('image/jpeg', q));
+      cv.toBlob(b => b ? res(b) : rej(new Error('imagen')), 'image/jpeg', q);
     };
-    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('imagen')); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen')); };
     img.src = url;
   });
 }
-async function guardarGasto(){
+function guardarGasto(){
   const u = yo(), c = concepto($('#gc').value);
   const edit = editId ? db.gastos.find(x => x.id === editId) : null;
   const fecha = $('#gf').value;
   if(!fecha) return toast('Ingrese la fecha del ticket');
   if(fecha > hoy()) return toast('La fecha no puede ser futura');
   if(fecha.slice(0,7) !== per) return toast(`La fecha debe estar dentro de ${mesNombre(per)}`);
-  if(!edit && estadoPer(u.id, per) !== 'abierto') return toast(`${mesNombre(per)} ya fue enviado; no admite gastos nuevos`);
   const valor = Number($('#gv').value || 0);
   if(!(valor > 0)) return toast('Ingrese el valor');
+  const id = edit ? edit.id : (nuevoGastoId = nuevoGastoId || uuid());
+  const path = `${u.id}/${id}.jpg`;
   const file = $('#gfoto').files[0];
-  if(!file && !edit?.foto) return toast('Adjunte la foto del ticket');
+  if(!file && !edit?.fotoPath && !subidas.has(path)) return toast('Adjunte la foto del ticket');
   const empresa = $('#gemp')?.value.trim() || '', personas = $('#gper')?.value.trim() || '';
   const nPersonas = Number($('#gn')?.value || 1);
   if(c.obsequio && !empresa) return toast('Nombre del cliente requerido');
@@ -433,26 +520,32 @@ async function guardarGasto(){
   const tope = db.topes[c.id], real = c.porPersona ? valor / Math.max(nPersonas, 1) : valor;
   const comentario = $('#gcom')?.value.trim() || '';
   if(tope && real > tope && !comentario) return toast('Escriba el motivo del sobrepresupuesto');
-  $('#btnGuardar').disabled = true;
-  let foto = edit?.foto || null;
-  if(file){ try { foto = await comprimir(file); } catch(e){ $('#btnGuardar').disabled = false; return toast('No se pudo leer la imagen'); } }
-  const datos = {fecha, periodo:per, concepto:c.id, valor, centro:$('#gcc').value, medio:$('#gm').value,
-    empresa, personas: c.cliente ? personas : '', nPersonas: c.cliente ? nPersonas : 1, cliente:!!c.cliente,
-    fuera: !!$('#gfuera')?.checked, factura: $('#gfact').checked, comentario, foto};
-  const respaldo = JSON.stringify(db);
-  if(edit) Object.assign(edit, datos, {estado:'borrador', corregido: edit.corregido || edit.estado === 'devuelto'});
-  else db.gastos.push({id:'g' + Date.now(), userId:u.id, estado:'borrador', devolucion:'', ...datos});
-  try { save(); }
-  catch(e){ db = JSON.parse(respaldo); $('#btnGuardar').disabled = false; return toast('Este navegador ya no tiene espacio para más fotos (límite del prototipo)'); }
-  editId = null; toast(edit ? 'Gasto actualizado' : 'Gasto guardado'); render();
+  const d = {id, fecha, concepto:c.id, valor, centro:$('#gcc').value, medio:$('#gm').value, empresa, personas, n_personas:nPersonas,
+    fuera: !!$('#gfuera')?.checked, factura: $('#gfact').checked, comentario, foto_path: path};
+  ejecutar(async () => {
+    if(file){
+      const blob = await comprimir(file);
+      const {error} = await sb.storage.from('tickets').upload(path, blob, {contentType:'image/jpeg', upsert:true});
+      if(error) throw new Error('No se pudo subir la foto: ' + error.message);
+      subidas.add(path); delete fotoUrls[path];
+    }
+    await rpc('guardar_gasto', {d});
+    editId = null; nuevoGastoId = null;
+    await refrescar(edit ? 'Gasto actualizado' : 'Gasto guardado');
+  });
 }
 function editarGasto(id){ editId = id; render(); window.scrollTo(0,0); }
 function borrarGasto(id){
   if(!confirm('¿Eliminar este gasto?')) return;
-  db.gastos = db.gastos.filter(g => g.id !== id); if(editId === id) editId = null; save(); render();
+  ejecutar(async () => {
+    const path = await rpc('eliminar_gasto', {p_id: id});
+    if(path) await sb.storage.from('tickets').remove([path]);
+    if(editId === id) editId = null;
+    await refrescar('Gasto eliminado');
+  });
 }
 
-/* ---- envío del periodo ---- */
+/* ===== Envío del periodo ===== */
 function textoEnvio(u, p, lista){ return `Comprobación ${mesNombre(p)} completada. ${lista.length} gasto(s) por ${money(sum(lista))}. ${u.nombre}. Revisar en TU comprobación.`; }
 function vEnviar(u){
   if(!per) per = periodoDefecto(u);
@@ -487,14 +580,8 @@ function vEnviar(u){
   return h + '</div>';
 }
 function enviarPeriodo(){
-  const u = yo(), lista = gastosDe(u.id, per).filter(g => g.estado === 'borrador');
-  if(!lista.length) return;
   if(per === mesActual() && !confirm(`${mesNombre(per)} aún no termina. Normalmente se envía al cerrar el mes. ¿Enviar de todas formas?`)) return;
-  let r = perRec(u.id, per);
-  if(!r){ r = {userId:u.id, periodo:per}; db.periodos.push(r); }
-  r.estado = 'enviado'; r.enviado = hoy(); r.envios = (r.envios || 0) + 1;
-  lista.forEach(g => g.estado = 'enviado');
-  save(); toast('Periodo enviado. Avise al autorizador por WhatsApp.'); render();
+  ejecutar(async () => { await rpc('enviar_periodo', {p_periodo: per}); await refrescar('Periodo enviado. Avise al autorizador por WhatsApp.'); });
 }
 function resumenSaldo(u, r){
   if(u.pago === 'anticipo' && r.diferencia != null){
@@ -503,11 +590,11 @@ function resumenSaldo(u, r){
     return `<div class="alert ok">Anticipo ${money(r.anticipo)} · saldo en cero.</div>`;
   }
   if(u.pago === 'caja') return `<p class="muted">Reposición de caja: ${money(r.total)}.</p>`;
-  if(u.pago === 'tarjeta') return `<p class="muted">Pago de tarjeta registrado: ${money(sum(gastosDe(u.id, r.periodo).filter(g => g.medio === 'tarjeta')))}.</p>`;
+  if(u.pago === 'tarjeta') return `<p class="muted">Pago de tarjeta: ${money(sum(gastosDe(u.id, r.periodo).filter(g => g.medio === 'tarjeta')))}.</p>`;
   return '';
 }
 
-/* ---- anticipos ---- */
+/* ===== Anticipos ===== */
 function vAnticipos(u){
   const abierto = anticipoAbierto(u), jefe = usuario(u.autoriza), cont = contabilidad();
   const mios = db.anticipos.filter(a => a.userId === u.id).sort((a,b) => b.fecha.localeCompare(a.fecha));
@@ -532,15 +619,13 @@ function vAnticipos(u){
   return h;
 }
 function solicitarAnticipo(){
-  const u = yo(), monto = Number($('#am').value || 0), motivo = $('#amo').value.trim();
-  if(anticipoAbierto(u)) return toast('Tiene un anticipo sin comprobar');
+  const monto = Number($('#am').value || 0), motivo = $('#amo').value.trim();
   if(!(monto > 0)) return toast('Ingrese el monto');
   if(!motivo) return toast('Escriba el motivo');
-  db.anticipos.push({id:'a' + Date.now(), userId:u.id, monto, motivo, estado:'solicitado', fecha:hoy()});
-  save(); toast('Anticipo solicitado. Avise por WhatsApp.'); render();
+  ejecutar(async () => { await rpc('solicitar_anticipo', {p_monto: monto, p_motivo: motivo}); await refrescar('Anticipo solicitado. Avise por WhatsApp.'); });
 }
 
-/* ---- autorizar ---- */
+/* ===== Autorizar ===== */
 function vAutorizar(u){
   const mios = autorizaA(u).map(x => x.id);
   const ants = db.anticipos.filter(a => a.estado === 'solicitado' && mios.includes(a.userId));
@@ -575,41 +660,39 @@ function todos(userId, on){ document.querySelectorAll('.ck-' + userId).forEach(c
 function resolver(userId, periodo, accion){
   const ids = [...document.querySelectorAll('.ck-' + userId + ':checked')].map(c => c.value);
   if(!ids.length) return toast('Seleccione gastos');
-  if(accion === 'devolver' && ids.some(id => !$('#c-' + id).value.trim())) return toast('Escriba el comentario de cada gasto devuelto');
-  ids.forEach(id => {
-    const g = db.gastos.find(x => x.id === id);
-    if(accion === 'aprobar'){ g.estado = 'aprobado'; }
-    else { g.estado = 'devuelto'; g.devolucion = $('#c-' + id).value.trim(); }
+  const items = ids.map(id => ({id, comentario: $('#c-' + id).value.trim()}));
+  if(accion === 'devolver' && items.some(i => !i.comentario)) return toast('Escriba el comentario de cada gasto devuelto');
+  ejecutar(async () => {
+    const r = await rpc('resolver_gastos', {p_user: userId, p_periodo: periodo, p_accion: accion, p_items: items});
+    await cargar();
+    const d = usuario(userId), gs = gastosDe(userId, periodo);
+    if(r === 'devuelto'){
+      const n = gs.filter(g => g.estado === 'devuelto').length;
+      aviso = `Comprobación de ${esc(d.nombre)} devuelta (${n} gasto(s)). ` +
+        btnWa('avisar a ' + d.nombre, d.telefono, `Comprobación ${mesNombre(periodo)}: ${n} gasto(s) devuelto(s). Revise los comentarios y corrija en TU comprobación.`);
+    } else if(r === 'autorizado'){
+      const cont = contabilidad();
+      aviso = `Comprobación de ${esc(d.nombre)} autorizada y enviada a contabilidad. ` +
+        (cont ? btnWa('avisar a contabilidad', cont.telefono, `Comprobación ${mesNombre(periodo)} de ${d.nombre} autorizada por ${money(sum(gs))}. Lista para finiquitar.`) : '');
+    }
+    render(); window.scrollTo(0,0);
+    if(r === 'parcial') toast(accion === 'aprobar' ? 'Aprobados' : 'Marcados como devueltos');
   });
-  const gs = gastosDe(userId, periodo), r = perRec(userId, periodo), d = usuario(userId);
-  if(gs.some(g => g.estado === 'enviado')){ toast(accion === 'aprobar' ? 'Aprobados' : 'Marcados como devueltos'); save(); return render(); }
-  if(gs.some(g => g.estado === 'devuelto')){
-    r.estado = 'devuelto';
-    const n = gs.filter(g => g.estado === 'devuelto').length;
-    aviso = `Comprobación de ${esc(d.nombre)} devuelta (${n} gasto(s)). ` +
-      btnWa('avisar a ' + d.nombre, d.telefono, `Comprobación ${mesNombre(periodo)}: ${n} gasto(s) devuelto(s). Revise los comentarios y corrija en TU comprobación.`);
-  } else {
-    r.estado = 'autorizado'; r.autorizado = hoy();
-    const cont = contabilidad();
-    aviso = `Comprobación de ${esc(d.nombre)} autorizada y enviada a contabilidad. ` +
-      (cont ? btnWa('avisar a contabilidad', cont.telefono, `Comprobación ${mesNombre(periodo)} de ${d.nombre} autorizada por ${money(sum(gs))}. Lista para finiquitar.`) : '');
-  }
-  save(); render(); window.scrollTo(0,0);
 }
 function resolverAnticipo(id, ok){
-  const a = db.anticipos.find(x => x.id === id), d = usuario(a.userId), cont = contabilidad();
-  if(ok){
-    a.estado = 'autorizado'; a.autorizado = hoy(); a.autorizadoPor = db.sesion;
-    aviso = `Anticipo de ${esc(d.nombre)} autorizado. ` + (cont ? btnWa('avisar a contabilidad', cont.telefono, `Anticipo autorizado: ${d.nombre}, ${money(a.monto)} (${a.motivo}). Favor depositar.`) : '');
-  } else {
-    const m = prompt('Motivo del rechazo'); if(!m || !m.trim()) return toast('Escriba el motivo del rechazo');
-    a.estado = 'rechazado'; a.rechazo = m.trim();
-    aviso = `Anticipo rechazado. ` + btnWa('avisar a ' + d.nombre, d.telefono, `Su solicitud de anticipo por ${money(a.monto)} fue rechazada: ${a.rechazo}`);
-  }
-  save(); render();
+  let motivo = '';
+  if(!ok){ motivo = prompt('Motivo del rechazo') || ''; if(!motivo.trim()) return toast('Escriba el motivo del rechazo'); }
+  ejecutar(async () => {
+    await rpc('resolver_anticipo', {p_id: id, p_ok: ok, p_motivo: motivo});
+    await cargar();
+    const a = db.anticipos.find(x => x.id === id), d = usuario(a.userId), cont = contabilidad();
+    aviso = ok ? `Anticipo de ${esc(d.nombre)} autorizado. ` + (cont ? btnWa('avisar a contabilidad', cont.telefono, `Anticipo autorizado: ${d.nombre}, ${money(a.monto)} (${a.motivo}). Favor depositar.`) : '')
+               : `Anticipo rechazado. ` + btnWa('avisar a ' + d.nombre, d.telefono, `Su solicitud de anticipo por ${money(a.monto)} fue rechazada: ${a.rechazo}`);
+    render();
+  });
 }
 
-/* ---- contabilidad ---- */
+/* ===== Contabilidad ===== */
 function vContab(u){
   const aut = db.periodos.filter(p => p.estado === 'autorizado');
   const porDep = db.anticipos.filter(a => a.estado === 'autorizado');
@@ -649,61 +732,69 @@ function vContab(u){
       : '<p class="muted">Todos al día.</p>'}
   </div>
   <div class="card"><h2>Finiquitados recientes</h2>
-    ${fin.length ? tabla(fin.map(p => `<tr><td>${esc(usuario(p.userId).nombre)}</td><td>${mesNombre(p.periodo)}</td><td class="num">${money(p.total)}</td><td>${p.finiquitado}</td><td>${resumenSaldo(usuario(p.userId), p).replace(/<\/?(div|p)[^>]*>/g, '')}</td></tr>`).join('')) : '<p class="muted">Ninguno.</p>'}
+    ${fin.length ? tabla(fin.map(p => `<tr><td>${esc(usuario(p.userId)?.nombre)}</td><td>${mesNombre(p.periodo)}</td><td class="num">${money(p.total)}</td><td>${p.finiquitado}</td><td>${resumenSaldo(usuario(p.userId), p).replace(/<\/?(div|p)[^>]*>/g, '')}</td></tr>`).join('')) : '<p class="muted">Ninguno.</p>'}
   </div>`;
 }
 function finiquitar(userId, periodo){
-  const r = perRec(userId, periodo), d = usuario(userId), gs = gastosDe(userId, periodo), t = sum(gs);
+  const r = perRec(userId, periodo);
   if(!r.exportado && !confirm('Este periodo no se ha exportado. Al finiquitar se borran las fotos. ¿Continuar?')) return;
-  if(d.pago === 'anticipo'){
-    const ants = db.anticipos.filter(a => a.userId === userId && a.estado === 'depositado');
-    r.anticipo = sum(ants, a => a.monto); r.diferencia = r.anticipo - t;
-    ants.forEach(a => { a.estado = 'comprobado'; a.periodo = periodo; });
-  }
-  gs.forEach(g => { g.estado = 'pagado'; if(g.foto){ g.foto = null; g.fotoArchivada = true; } });
-  r.estado = 'finiquitado'; r.finiquitado = hoy(); r.total = t;
-  save(); toast('Periodo finiquitado'); render();
+  ejecutar(async () => {
+    const fotos = await rpc('finiquitar', {p_user: userId, p_periodo: periodo});
+    if(fotos?.length) await sb.storage.from('tickets').remove(fotos);
+    await refrescar('Periodo finiquitado');
+  });
 }
 function depositar(id){
-  const a = db.anticipos.find(x => x.id === id), d = usuario(a.userId);
-  a.estado = 'depositado'; a.depositado = hoy(); save();
-  aviso = `Depósito confirmado. ` + btnWa('avisar a ' + d.nombre, d.telefono, `Su anticipo por ${money(a.monto)} fue depositado.`);
-  render();
+  ejecutar(async () => {
+    await rpc('depositar_anticipo', {p_id: id});
+    await cargar();
+    const a = db.anticipos.find(x => x.id === id), d = usuario(a.userId);
+    aviso = `Depósito confirmado. ` + btnWa('avisar a ' + d.nombre, d.telefono, `Su anticipo por ${money(a.monto)} fue depositado.`);
+    render();
+  });
 }
 function filasExport(p){ return db.gastos.filter(g => g.periodo === p && ['aprobado','pagado'].includes(g.estado)); }
-const nombreFoto = g => `fotos/${g.periodo}_${usuario(g.userId).login}_${g.fecha}_${g.id}.jpg`;
+const nombreFoto = g => `fotos/${g.periodo}_${usuario(g.userId)?.login}_${g.fecha}_${g.id.slice(0,8)}.jpg`;
 function csvMes(p){
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const head = ['Periodo','Colaborador','Usuario','Puesto','Tipo de pago','Centro de costos','Fecha','Concepto','Valor','Medio de pago','Empresa/Cliente','Personas','N personas','Fuera de ciudad','Factura enviada','Comentario','Estado','Foto'];
-  const rows = filasExport(p).map(g => { const u = usuario(g.userId);
+  const rows = filasExport(p).map(g => { const u = usuario(g.userId) || {};
     return [g.periodo, u.nombre, u.login, u.puesto, PAGOS[u.pago] || '', g.centro, g.fecha, nombreConcepto(g.concepto), g.valor, MEDIOS[g.medio] || g.medio,
-      g.empresa, g.personas, g.cliente ? g.nPersonas : '', g.fuera ? 'Sí' : '', g.factura ? 'Sí' : 'No', g.comentario, g.estado === 'pagado' ? 'finiquitado' : 'autorizado', g.foto ? nombreFoto(g) : ''];
+      g.empresa, g.personas, g.cliente ? g.nPersonas : '', g.fuera ? 'Sí' : '', g.factura ? 'Sí' : 'No', g.comentario, g.estado === 'pagado' ? 'finiquitado' : 'autorizado', g.fotoPath ? nombreFoto(g) : ''];
   });
   return '﻿' + [head, ...rows].map(r => r.map(q).join(';')).join('\r\n');
 }
 function descargar(blob, nombre){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
-function marcarExportado(p){ db.periodos.filter(r => r.periodo === p && r.estado === 'autorizado').forEach(r => r.exportado = hoy()); save(); }
 function exportarCSV(p){ descargar(new Blob([csvMes(p)], {type:'text/csv;charset=utf-8'}), `comprobaciones_${p}.csv`); }
-async function exportarZIP(p){
-  if(!window.JSZip) return toast('No se pudo cargar el compresor ZIP (sin internet). Descargue el CSV.');
-  const zip = new JSZip(); zip.file(`comprobaciones_${p}.csv`, csvMes(p));
-  filasExport(p).filter(g => g.foto).forEach(g => zip.file(nombreFoto(g), g.foto.split(',')[1], {base64:true}));
-  descargar(await zip.generateAsync({type:'blob'}), `comprobaciones_${p}.zip`);
-  marcarExportado(p); toast('Exportado'); render();
+function exportarZIP(p){
+  if(!window.JSZip) return toast('No se pudo cargar el compresor ZIP. Descargue el CSV.');
+  ejecutar(async () => {
+    const zip = new JSZip(); zip.file(`comprobaciones_${p}.csv`, csvMes(p));
+    for(const g of filasExport(p).filter(g => g.fotoPath)){
+      const {data, error} = await sb.storage.from('tickets').download(g.fotoPath);
+      if(error) throw new Error('No se pudo descargar una foto: ' + error.message);
+      zip.file(nombreFoto(g), data);
+    }
+    descargar(await zip.generateAsync({type:'blob'}), `comprobaciones_${p}.zip`);
+    await rpc('marcar_exportado', {p_periodo: p});
+    await refrescar('Exportado');
+  });
 }
 
-/* ---- matriz de usuarios (contabilidad) ---- */
+/* ===== Matriz de usuarios (contabilidad) ===== */
 function vUsuarios(u){
-  const x = editUser === 'nuevo' ? nuevoUsuario({id:'', login:'', nombre:'', puesto:'', rol:'vendedor', pago:'tarjeta', centro:'Comercial'})
+  const nuevo = editUser === 'nuevo';
+  const x = nuevo ? {id:'', login:'', nombre:'', puesto:'', telefono:'', rol:'vendedor', autoriza:null, pago:'tarjeta', centro:'Comercial', credito:0, montoCaja:0, encargado:''}
           : editUser ? usuario(editUser) : null;
   const opcionesAut = x ? activos().filter(a => puedeAutorizar(a) && a.id !== x.id) : [];
   const form = !x ? '' : `
   <div class="card">
-    <h2>${editUser === 'nuevo' ? 'Nuevo usuario' : 'Editar: ' + esc(x.nombre)}</h2>
+    <h2>${nuevo ? 'Nuevo usuario' : 'Editar: ' + esc(x.nombre)}</h2>
     ${x.bloqueado ? `<div class="alert bad">Usuario bloqueado por intentos fallidos. <button class="ghost sm" onclick="desbloquear('${x.id}')">Desbloquear</button></div>` : ''}
     <div class="row">
       <div><label>Nombre</label><input id="un" value="${esc(x.nombre)}" oninput="sugerirLogin()"></div>
-      <div><label>Usuario para ingresar</label><input id="ul" value="${esc(x.login)}" autocapitalize="none"></div>
+      <div><label>Usuario para ingresar</label><input id="ul" value="${esc(x.login)}" autocapitalize="none" ${nuevo ? '' : 'disabled'}>
+        ${nuevo ? '' : '<p class="muted">El usuario no se puede cambiar.</p>'}</div>
     </div>
     <div class="row">
       <div><label>Puesto</label><input id="up" value="${esc(x.puesto)}"></div>
@@ -717,8 +808,7 @@ function vUsuarios(u){
     <div class="row">
       <div class="f-pago"><label>Tipo de pago</label><select id="upg" onchange="ajustarUsuarioForm()">
         <option value="tarjeta" ${x.pago==='tarjeta'?'selected':''}>Tarjeta de crédito</option>
-        <option value="anticipo" ${x.pago==='anticipo'?'selected':''}>Anticipo</option>
-        <option value="" ${!x.pago?'selected':''}>No aplica</option></select></div>
+        <option value="anticipo" ${x.pago==='anticipo'?'selected':''}>Anticipo</option></select></div>
       <div><label>Centro de costos / planta</label><select id="uc"><option value="">—</option>${db.centros.map(c => `<option ${x.centro===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
     </div>
     <div class="row">
@@ -729,8 +819,8 @@ function vUsuarios(u){
     <div class="acciones">
       <button class="primary" onclick="guardarUsuario()">Guardar</button>
       <button class="ghost" onclick="editUser=null;render()">Cancelar</button>
-      ${editUser !== 'nuevo' ? `<button class="ghost" onclick="restablecer('${x.id}')">Restablecer contraseña</button>
-        <button class="danger" onclick="activar('${x.id}',${x.activo === false})">${x.activo === false ? 'Reactivar' : 'Desactivar'}</button>` : ''}
+      ${!nuevo ? `<button class="ghost" onclick="restablecer('${x.id}')">Restablecer contraseña</button>
+        ${x.id !== u.id ? `<button class="danger" onclick="activar('${x.id}',${x.activo === false})">${x.activo === false ? 'Reactivar' : 'Desactivar'}</button>` : ''}` : ''}
     </div>
   </div>`;
   const sinAut = activos().filter(y => puedeComprobar(y) && (!y.autoriza || usuario(y.autoriza)?.activo === false));
@@ -757,47 +847,42 @@ function ajustarUsuarioForm(){
 }
 function sugerirLogin(){
   if(editUser !== 'nuevo' || $('#ul').dataset.tocado) return;
-  const p = $('#un').value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const p = $('#un').value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).filter(Boolean);
   $('#ul').value = p.length > 1 ? p[0] + '.' + p[p.length - 1] : (p[0] || '');
 }
 document.addEventListener('input', e => { if(e.target.id === 'ul') e.target.dataset.tocado = '1'; });
-function claveTemporal(){ return 'Tu' + Math.random().toString(36).slice(2, 8) + Math.floor(Math.random() * 90 + 10); }
 function guardarUsuario(){
-  const rol = $('#ur').value, caja = rol === 'caja', comprueba = ['vendedor','lider','caja'].includes(rol);
-  const d = { nombre:$('#un').value.trim(), login:$('#ul').value.trim().toLowerCase(), puesto:$('#up').value.trim(), telefono:$('#ut').value.trim(),
-    rol, autoriza:$('#ua').value || null, pago: caja ? 'caja' : comprueba ? ($('#upg').value || null) : null, centro:$('#uc').value || null,
-    credito:Number($('#ucr').value || 0), montoCaja:Number($('#umc').value || 0), encargado:$('#uen').value.trim() };
+  const rol = $('#ur').value, comprueba = ['vendedor','lider','caja'].includes(rol);
+  const d = { nombre:$('#un').value.trim(), puesto:$('#up').value.trim(), telefono:$('#ut').value.trim(), rol,
+    autoriza:$('#ua').value || null, pago: rol === 'caja' ? 'caja' : comprueba ? $('#upg').value : null, centro:$('#uc').value || null,
+    credito:Number($('#ucr').value || 0), monto_caja:Number($('#umc').value || 0), encargado:$('#uen').value.trim() };
+  const login = $('#ul').value.trim().toLowerCase();
   if(!d.nombre || !d.puesto) return toast('Nombre y puesto son obligatorios');
-  if(!/^[a-z0-9._-]{3,}$/.test(d.login)) return toast('Usuario: mínimo 3 caracteres, sin espacios ni tildes');
-  if(db.usuarios.some(y => y.login === d.login && y.id !== editUser)) return toast('Ese usuario ya existe');
-  if(comprueba && !d.autoriza) return toast('Asigne quién lo autoriza');
-  if(comprueba && !d.pago) return toast('Defina el tipo de pago');
-  if(comprueba && !d.centro) return toast('Defina el centro de costos');
-  if(d.pago === 'tarjeta' && !d.credito) return toast('Ingrese el cupo de la tarjeta');
-  if(caja && !d.montoCaja) return toast('Ingrese el monto fijo de la caja');
-  if(d.pago !== 'tarjeta') d.credito = 0;
-  if(!caja){ d.montoCaja = 0; d.encargado = ''; }
-  if(editUser === 'nuevo'){
-    const clave = claveTemporal();
-    db.usuarios.push(nuevoUsuario({id:'u' + Date.now(), ...d, password:clave, cambiarClave:true}));
-    alert(`Usuario creado.\nUsuario: ${d.login}\nContraseña temporal: ${clave}\nEntréguela a ${d.nombre}; deberá cambiarla al primer ingreso.`);
-  } else {
-    if(d.autoriza === editUser) return toast('Nadie puede autorizarse a sí mismo');
-    Object.assign(usuario(editUser), d);
-    if(!puedeAutorizar(d)) db.usuarios.forEach(y => { if(y.autoriza === editUser) y.autoriza = null; });
-    toast('Usuario actualizado');
-  }
-  editUser = null; save(); render();
+  if(editUser === 'nuevo' && !/^[a-z0-9._-]{3,}$/.test(login)) return toast('Usuario: mínimo 3 caracteres, sin espacios ni tildes');
+  ejecutar(async () => {
+    if(editUser === 'nuevo'){
+      const r = await adminUsuarios({accion:'crear', login, datos:d});
+      editUser = null; await refrescar();
+      alert(`Usuario creado.\nUsuario: ${r.login}\nContraseña temporal: ${r.clave}\nEntréguela a ${d.nombre}; deberá cambiarla al primer ingreso.`);
+    } else {
+      await rpc('actualizar_usuario', {p_id: editUser, d});
+      editUser = null; await refrescar('Usuario actualizado');
+    }
+  });
 }
 function restablecer(id){
-  const y = usuario(id), clave = claveTemporal();
-  Object.assign(y, {password:clave, cambiarClave:true, bloqueado:false, intentos:0}); save();
-  alert(`Nueva contraseña temporal de ${y.nombre} (usuario ${y.login}): ${clave}`); render();
+  const y = usuario(id);
+  if(!confirm(`¿Generar una contraseña temporal nueva para ${y.nombre}?`)) return;
+  ejecutar(async () => {
+    const r = await adminUsuarios({accion:'restablecer', id});
+    await refrescar();
+    alert(`Nueva contraseña temporal de ${y.nombre} (usuario ${r.login}): ${r.clave}`);
+  });
 }
-function desbloquear(id){ Object.assign(usuario(id), {bloqueado:false, intentos:0}); save(); toast('Usuario desbloqueado'); render(); }
-function activar(id, on){ usuario(id).activo = on; save(); editUser = null; render(); }
+function desbloquear(id){ ejecutar(async () => { await rpc('desbloquear_usuario', {p_id: id}); await refrescar('Usuario desbloqueado'); }); }
+function activar(id, on){ ejecutar(async () => { await rpc('activar_usuario', {p_id: id, p_activo: on}); editUser = null; await refrescar(on ? 'Usuario reactivado' : 'Usuario desactivado'); }); }
 
-/* ---- administración ---- */
+/* ===== Administración ===== */
 function vDashboard(u){
   if(!dper) dper = mesActual();
   const meses = [...new Set([mesActual(), mesAnterior(), ...db.gastos.map(g => g.periodo)])].sort().reverse();
@@ -820,7 +905,7 @@ function vDashboard(u){
   <div class="card"><h2>Saldos de tarjeta</h2>${tarjetas.length ? tabla(`<tr><th>Persona</th><th class="num">Cupo</th><th class="num">Saldo</th></tr>
     ${tarjetas.map(x => `<tr><td>${esc(x.nombre)}</td><td class="num">${money(x.credito)}</td><td class="num">${money(saldoTarjeta(x))}</td></tr>`).join('')}`) : '<p class="muted">Ninguna</p>'}</div>
   <div class="card"><h2>Anticipos pendientes</h2>${ants.length ? tabla(`<tr><th>Persona</th><th class="num">Monto</th><th>Estado</th><th>Desde</th></tr>
-    ${ants.map(a => `<tr><td>${esc(usuario(a.userId).nombre)}</td><td class="num">${money(a.monto)}</td><td>${tagEstado(a.estado)}</td><td>${a.fecha}</td></tr>`).join('')}`) : '<p class="muted">Ninguno</p>'}</div>
+    ${ants.map(a => `<tr><td>${esc(usuario(a.userId)?.nombre)}</td><td class="num">${money(a.monto)}</td><td>${tagEstado(a.estado)}</td><td>${a.fecha}</td></tr>`).join('')}`) : '<p class="muted">Ninguno</p>'}</div>
   <div class="card"><h2>Cajas menores</h2>${cajas.length ? tabla(`<tr><th>Caja</th><th>Encargado</th><th class="num">Monto fijo</th><th class="num">Disponible</th></tr>
     ${cajas.map(x => `<tr><td>${esc(x.nombre)}</td><td>${esc(x.encargado || '—')}</td><td class="num">${money(x.montoCaja)}</td><td class="num">${money(disponibleCaja(x))}</td></tr>`).join('')}`) : '<p class="muted">Ninguna</p>'}</div>`;
 }
@@ -835,11 +920,26 @@ function vPoliticas(u){
     <p>${db.centros.map(c => `<span class="tag">${esc(c)}</span>`).join(' ')}</p>
     <div class="row"><div><input id="ncc" placeholder="Nuevo centro de costos"></div><div><button class="ghost" onclick="agregarCentro()">Agregar</button></div></div></div>`;
 }
-function guardarTopes(){ CONCEPTOS.forEach(c => { const v = Number($('#t-' + c.id).value || 0); if(v > 0) db.topes[c.id] = v; else delete db.topes[c.id]; }); save(); toast('Topes guardados'); }
-function agregarCentro(){ const v = $('#ncc').value.trim(); if(!v) return; if(db.centros.includes(v)) return toast('Ya existe'); db.centros.push(v); save(); render(); }
+function guardarTopes(){
+  const d = {}; CONCEPTOS.forEach(c => { const v = Number($('#t-' + c.id).value || 0); if(v > 0) d[c.id] = v; });
+  ejecutar(async () => { await rpc('guardar_topes', {d}); await refrescar('Topes guardados'); });
+}
+function agregarCentro(){
+  const v = $('#ncc').value.trim(); if(!v) return;
+  ejecutar(async () => { await rpc('agregar_centro', {p_nombre: v}); await refrescar('Centro agregado'); });
+}
 
-revisarInactividad();
-render();
+/* ===== Arranque ===== */
+(async () => {
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    if(!session) return render();
+    if(inactivo()) return cerrarSesion('Sesión cerrada por 30 minutos de inactividad');
+    const est = await rpc('login_ok');
+    if(est !== 'ok') return cerrarSesion(est === 'bloqueado' ? 'Usuario bloqueado. Pida a contabilidad que lo desbloquee.' : 'Usuario inactivo. Consulte con contabilidad.');
+    await iniciarSesion();
+  } catch(e){ console.error(e); $('#app').innerHTML = `<div class="card alert bad">No se pudo conectar: ${esc(e.message)}. <button class="ghost sm" onclick="location.reload()">Reintentar</button></div>`; }
+})();
 </script>
 </body>
 </html>
