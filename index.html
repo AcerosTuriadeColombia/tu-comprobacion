@@ -4,35 +4,55 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TU comprobación</title>
+<script src="vendor/jszip.min.js"></script>
 <style>
   :root { --turia:#0b3d6b; --tu:#f29a1f; --bg:#f4f6f9; --card:#fff; --line:#dde3ea; --ok:#1f8a4c; --warn:#b26a00; --bad:#b3261e; }
   * { box-sizing: border-box; }
   body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:#1d2530; }
-  header { background:var(--turia); color:#fff; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+  header { background:var(--turia); color:#fff; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
   .logo { font-weight:800; font-size:20px; line-height:1; }
   .logo b { color:var(--tu); }
   .logo small { display:block; font-weight:500; font-size:12px; opacity:.9; }
+  nav { display:flex; flex-wrap:wrap; }
   nav button { background:none; border:0; color:#cfe0f2; padding:8px 10px; cursor:pointer; font-size:14px; }
   nav button.on { color:#fff; border-bottom:2px solid var(--tu); }
-  main { padding:16px; max-width:900px; margin:0 auto; }
+  .badge { background:var(--tu); color:#fff; border-radius:99px; padding:1px 7px; font-size:11px; margin-left:4px; }
+  main { padding:16px; max-width:960px; margin:0 auto; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:14px; }
   h2 { margin:0 0 12px; font-size:18px; color:var(--turia); }
+  h3 { margin:14px 0 8px; font-size:15px; color:var(--turia); }
   label { display:block; font-size:13px; margin:10px 0 4px; color:#4a5566; }
-  input, select, textarea { width:100%; padding:9px; border:1px solid var(--line); border-radius:6px; font-size:15px; }
+  label.ck { display:flex; gap:8px; align-items:flex-start; color:#1d2530; font-size:14px; }
+  label.ck input { width:auto; margin-top:3px; }
+  input, select, textarea { width:100%; padding:9px; border:1px solid var(--line); border-radius:6px; font-size:15px; font-family:inherit; }
   .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   @media (max-width:600px) { .row { grid-template-columns:1fr; } }
+  button { font-family:inherit; }
   button.primary { background:var(--turia); color:#fff; border:0; padding:10px 16px; border-radius:6px; font-size:15px; cursor:pointer; }
-  button.ghost { background:#fff; color:var(--turia); border:1px solid var(--turia); padding:9px 14px; border-radius:6px; cursor:pointer; }
-  button.danger { background:#fff; color:var(--bad); border:1px solid var(--bad); padding:9px 14px; border-radius:6px; cursor:pointer; }
-  .tag { display:inline-block; font-size:12px; padding:3px 8px; border-radius:99px; background:#eef2f7; }
+  button.primary:disabled { opacity:.45; cursor:not-allowed; }
+  button.ghost { background:#fff; color:var(--turia); border:1px solid var(--turia); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:14px; }
+  button.danger { background:#fff; color:var(--bad); border:1px solid var(--bad); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:14px; }
+  button.sm { padding:4px 9px; font-size:13px; }
+  a.wa { display:inline-block; background:#1f8a4c; color:#fff; padding:9px 14px; border-radius:6px; text-decoration:none; font-size:14px; margin:6px 6px 0 0; }
+  .acciones { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .tag { display:inline-block; font-size:12px; padding:3px 8px; border-radius:99px; background:#eef2f7; white-space:nowrap; }
   .tag.ok { background:#e3f4ea; color:var(--ok); } .tag.warn { background:#fff3dc; color:var(--warn); } .tag.bad { background:#fde7e5; color:var(--bad); }
+  .tw { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; font-size:14px; }
   th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  td.num, th.num { text-align:right; white-space:nowrap; }
+  tr.devuelto td { background:#fff6f5; }
   .muted { color:#6b7787; font-size:13px; }
   .total { font-size:22px; font-weight:700; color:var(--turia); }
-  .alert { background:#fff3dc; border:1px solid #f0c674; padding:10px; border-radius:8px; margin-top:10px; font-size:14px; }
-  .hidden { display:none; }
-  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#1d2530; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; }
+  .alert { background:#fff3dc; border:1px solid #f0c674; padding:10px; border-radius:8px; margin:10px 0; font-size:14px; }
+  .alert.bad { background:#fde7e5; border-color:#f3b1ab; }
+  .alert.ok { background:#e3f4ea; border-color:#a9d9bc; }
+  .thumb { width:44px; height:44px; object-fit:cover; border-radius:4px; cursor:pointer; border:1px solid var(--line); display:block; }
+  .bar { height:8px; background:var(--turia); border-radius:4px; min-width:2px; }
+  .hidden { display:none !important; }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#1d2530; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; z-index:20; max-width:92vw; }
+  #modal { position:fixed; inset:0; background:rgba(0,0,0,.8); display:flex; align-items:center; justify-content:center; z-index:10; cursor:zoom-out; }
+  #modal img { max-width:95vw; max-height:92vh; border-radius:6px; }
 </style>
 </head>
 <body>
@@ -42,9 +62,10 @@
 </header>
 <main id="app"></main>
 <div id="toast" class="toast hidden"></div>
+<div id="modal" class="hidden" onclick="this.classList.add('hidden')"><img alt="Ticket"></div>
 
 <script>
-/* PROTOTIPO: datos en localStorage. Producción = Supabase Auth + tablas. */
+/* PROTOTIPO: datos y fotos en localStorage de este navegador. Producción = Supabase Auth + tablas + Storage. */
 const CONCEPTOS = [
   {id:'desayuno', nombre:'Desayuno', comidaIndividual:true},
   {id:'almuerzo', nombre:'Almuerzo', comidaIndividual:true},
@@ -56,366 +77,768 @@ const CONCEPTOS = [
   {id:'obsequio', nombre:'Obsequio', obsequio:true},
   {id:'hospedaje', nombre:'Hospedaje'},
 ];
-const CENTROS = ['Planta Amagá','Planta Malambo','Comercial'];
-const TOPES = {}; // vacío hasta recibir la política de inventario
+const ROLES = {vendedor:'Vendedor', lider:'Líder', autorizador:'Autorizador', caja:'Caja menor', contabilidad:'Contabilidad', admin:'Administrador'};
+const PAGOS = {tarjeta:'Tarjeta de crédito', anticipo:'Anticipo', caja:'Caja menor'};
+const MEDIOS = {tarjeta:'Tarjeta', efectivo:'Efectivo', anticipo:'Anticipo', caja:'Caja menor'};
+const ESTADO_PER = {abierto:'abierto', enviado:'en revisión', devuelto:'devuelto', autorizado:'autorizado', finiquitado:'finiquitado'};
+const ESTADO_ANT = {solicitado:'solicitado', autorizado:'autorizado por jefe', rechazado:'rechazado', depositado:'depositado', comprobado:'comprobado'};
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const KEY = 'tuc3', ACT = 'tuc3_act';
+const INACTIVIDAD = 30*60*1000;   // 30 minutos
+const DIA_LIMITE = 5;             // radicación: primeros 5 días del mes
+const DIAS_CLAVE = 90;            // cambio de contraseña cada 90 días
+const MAX_INTENTOS = 5;
 
-const seed = {
-  /* Usuarios de ejemplo. En uso real, contabilidad da de alta a todos y define quién autoriza a quién. */
-  usuarios: [
-    {id:'c1', nombre:'Contabilidad', rol:'contabilidad', puesto:'Contador', autoriza:null, pago:null, centro:null, credito:0, password:'demo'},
-    {id:'a1', nombre:'Administrador', rol:'admin', puesto:'Administración', autoriza:null, pago:null, centro:null, credito:0, password:'demo'},
-    {id:'u1', nombre:'Autorizador Demo', rol:'autorizador', puesto:'Autorizador', autoriza:null, pago:null, centro:'Comercial', credito:0, password:'demo'},
-    {id:'u3', nombre:'Líder Demo', rol:'lider', puesto:'Líder comercial', autoriza:'u1', pago:'anticipo', centro:'Comercial', credito:0, password:'demo'},
-    {id:'u2', nombre:'Vendedor Demo', rol:'vendedor', puesto:'Vendedor', autoriza:'u3', pago:'tarjeta', centro:'Comercial', credito:4000000, password:'demo'},
-  ],
-  gastos: [
-    {id:'g1', userId:'u2', periodo:'2026-11', fecha:'2026-11-03', concepto:'comida_cliente', valor:184000, centro:'Comercial', empresa:'HomeCenter', personas:'Compras', cliente:true, nPersonas:3, medio:'tarjeta', estado:'borrador', comentario:'', foto:true},
-    {id:'g2', userId:'u2', periodo:'2026-11', fecha:'2026-11-04', concepto:'peaje', valor:21500, centro:'Comercial', medio:'efectivo', estado:'borrador', comentario:'', foto:true},
-  ],
-  periodos: [],
-  anticipos: [],
-  sesion: null,
-};
-
-const ROLES = {vendedor:'Vendedor', lider:'Líder', autorizador:'Autorizador', contabilidad:'Contabilidad', admin:'Administrador'};
-const KEY = 'tuc2';
-function load() { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : structuredClone(seed); }
-function save() { localStorage.setItem(KEY, JSON.stringify(db)); }
-let db = load();
-let vista = 'inicio';
+/* ---- utilidades ---- */
 const $ = s => document.querySelector(s);
-const money = n => '$ ' + Number(n||0).toLocaleString('es-CO');
-const hoy = () => new Date().toISOString().slice(0,10);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => '$ ' + Math.round(Number(n||0)).toLocaleString('es-CO');
+const hoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
 const mesActual = () => hoy().slice(0,7);
-const nombreConcepto = id => (CONCEPTOS.find(c=>c.id===id)||{}).nombre || id;
-const usuario = id => db.usuarios.find(u=>u.id===id);
+function mesAnterior(p = mesActual()){ let [y,m] = p.split('-').map(Number); m--; if(!m){ m=12; y--; } return `${y}-${String(m).padStart(2,'0')}`; }
+function mesNombre(p){ const [y,m] = p.split('-').map(Number); return `${MESES[m-1]} ${y}`; }
+function ultimoDia(p){ const [y,m] = p.split('-').map(Number); return `${p}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`; }
+const diasDesde = f => Math.floor((Date.now() - new Date(f + 'T00:00:00').getTime()) / 86400000);
+const sum = (arr, f = x => x.valor) => arr.reduce((s, x) => s + Number(f(x) || 0), 0);
+const concepto = id => CONCEPTOS.find(c => c.id === id) || {id, nombre:id};
+const nombreConcepto = id => concepto(id).nombre;
+const tabla = html => `<div class="tw"><table>${html}</table></div>`;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hidden'), 3000); }
+function wa(tel, texto){
+  const n = String(tel || '').replace(/\D/g, '');
+  const num = n ? (n.length === 10 ? '57' + n : n) : '';
+  return `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
+}
+const btnWa = (etiqueta, tel, texto) => `<a class="wa" target="_blank" rel="noopener" href="${wa(tel, texto)}">WhatsApp: ${esc(etiqueta)}</a>`;
+
+/* ---- datos ---- */
+function nuevoUsuario(d){ return {autoriza:null, pago:null, centro:null, credito:0, montoCaja:0, encargado:'', telefono:'',
+  password:'demo', cambiarClave:false, claveFecha:hoy(), intentos:0, bloqueado:false, activo:true, ...d}; }
+function semilla(){
+  const ant = mesAnterior();
+  return {
+    /* Usuarios de ejemplo. En uso real, contabilidad da de alta a todos y define quién autoriza a quién. */
+    usuarios: [
+      nuevoUsuario({id:'c1', login:'contabilidad', nombre:'Contabilidad', rol:'contabilidad', puesto:'Contador'}),
+      nuevoUsuario({id:'a1', login:'admin', nombre:'Administrador', rol:'admin', puesto:'Administración'}),
+      nuevoUsuario({id:'u1', login:'autorizador', nombre:'Autorizador Demo', rol:'autorizador', puesto:'Autorizador', centro:'Comercial'}),
+      nuevoUsuario({id:'u3', login:'lider', nombre:'Líder Demo', rol:'lider', puesto:'Líder comercial', autoriza:'u1', pago:'anticipo', centro:'Comercial'}),
+      nuevoUsuario({id:'u2', login:'vendedor', nombre:'Vendedor Demo', rol:'vendedor', puesto:'Vendedor', autoriza:'u3', pago:'tarjeta', centro:'Comercial', credito:4000000}),
+      nuevoUsuario({id:'k1', login:'caja.amaga', nombre:'Caja menor Planta Amagá', rol:'caja', puesto:'Caja menor', autoriza:'u1', pago:'caja', centro:'Planta Amagá', montoCaja:2000000, encargado:'Por definir'}),
+    ],
+    gastos: [
+      {id:'g1', userId:'u2', periodo:ant, fecha:ant+'-03', concepto:'comida_cliente', valor:184000, centro:'Comercial', empresa:'HomeCenter', personas:'Compras', cliente:true, nPersonas:3, medio:'tarjeta', estado:'borrador', comentario:'', devolucion:'', factura:true, foto:null},
+      {id:'g2', userId:'u2', periodo:ant, fecha:ant+'-04', concepto:'peaje', valor:21500, centro:'Comercial', medio:'efectivo', estado:'borrador', comentario:'', devolucion:'', foto:null},
+    ],
+    periodos: [],
+    anticipos: [],
+    topes: {},  // vacío hasta recibir la política de inventario
+    centros: ['Planta Amagá','Planta Malambo','Comercial'],
+    sesion: null,
+  };
+}
+function load(){ try { const s = localStorage.getItem(KEY); if(s) return JSON.parse(s); } catch(e){} return semilla(); }
+function save(){ localStorage.setItem(KEY, JSON.stringify(db)); }
+let db = load();
+let vista = 'inicio', per = null, editId = null, editUser = null, aviso = null, dper = null;
+
+const usuario = id => db.usuarios.find(u => u.id === id);
 const yo = () => usuario(db.sesion);
-function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),2200); }
+const activos = () => db.usuarios.filter(u => u.activo !== false);
+const puedeComprobar = u => ['vendedor','lider','caja'].includes(u.rol);
+const puedeAutorizar = u => ['lider','autorizador','admin'].includes(u.rol);
+const autorizaA = u => db.usuarios.filter(x => x.autoriza === u.id && x.id !== u.id);
+const contabilidad = () => activos().find(u => u.rol === 'contabilidad');
+const perRec = (uid, p) => db.periodos.find(x => x.userId === uid && x.periodo === p);
+const estadoPer = (uid, p) => perRec(uid, p)?.estado || 'abierto';
+const gastosDe = (uid, p) => db.gastos.filter(g => g.userId === uid && g.periodo === p).sort((a,b) => a.fecha.localeCompare(b.fecha));
+const saldoTarjeta = u => u.credito - sum(db.gastos.filter(g => g.userId === u.id && g.medio === 'tarjeta' && g.estado !== 'pagado'));
+const disponibleCaja = u => u.montoCaja - sum(db.gastos.filter(g => g.userId === u.id && g.estado !== 'pagado'));
+const anticipoAbierto = u => db.anticipos.find(a => a.userId === u.id && !['comprobado','rechazado'].includes(a.estado));
+const debeCambiarClave = u => u.cambiarClave || (u.claveFecha && diasDesde(u.claveFecha) >= DIAS_CLAVE);
+const tagEstado = e => `<span class="tag ${({autorizado:'ok',finiquitado:'ok',aprobado:'ok',pagado:'ok',devuelto:'bad',rechazado:'bad',enviado:'warn',solicitado:'warn'})[e]||''}">${esc(ESTADO_PER[e]||ESTADO_ANT[e]||e)}</span>`;
 
-function puedeComprobar(u){ return ['vendedor','lider'].includes(u.rol); }
-function autorizaA(u){ return db.usuarios.filter(x=>x.autoriza===u.id); }
-function puedeAutorizar(u){ return ['lider','autorizador','admin'].includes(u.rol); }
-function gastosPeriodo(userId, periodo){ return db.gastos.filter(g=>g.userId===userId && g.periodo===periodo); }
-function periodoEstado(userId, periodo){
-  const p = db.periodos.find(x=>x.userId===userId && x.periodo===periodo);
-  return p ? p.estado : 'abierto';
+function periodoDefecto(u){
+  const ant = mesAnterior(), e = estadoPer(u.id, ant);
+  if(e === 'devuelto' || (e === 'abierto' && gastosDe(u.id, ant).length)) return ant;
+  return mesActual();
 }
-function saldoTarjeta(u){
-  const gastado = db.gastos.filter(g=>g.userId===u.id && g.medio==='tarjeta' && g.estado!=='pagado').reduce((s,g)=>s+g.valor,0);
-  return u.credito - gastado;
+function periodosDe(u){
+  const s = new Set([mesActual(), mesAnterior()]);
+  db.gastos.filter(g => g.userId === u.id).forEach(g => s.add(g.periodo));
+  db.periodos.filter(p => p.userId === u.id).forEach(p => s.add(p.periodo));
+  return [...s].sort().reverse().slice(0, 8);
+}
+function selectorPeriodo(u){
+  return `<label>Periodo</label><select onchange="per=this.value;editId=null;render()">${periodosDe(u).map(p =>
+    `<option value="${p}" ${p===per?'selected':''}>${mesNombre(p)} · ${ESTADO_PER[estadoPer(u.id,p)]}</option>`).join('')}</select>`;
 }
 
+/* ---- sesión e inactividad ---- */
+function tocar(){ try { localStorage.setItem(ACT, String(Date.now())); } catch(e){} }
+['click','keydown','touchstart'].forEach(ev => document.addEventListener(ev, () => { if(db.sesion) tocar(); }, {passive:true}));
+function revisarInactividad(){
+  if(!db.sesion) return;
+  const t = Number(localStorage.getItem(ACT) || 0);
+  if(Date.now() - t > INACTIVIDAD){ db.sesion = null; save(); vista = 'inicio'; render(); toast('Sesión cerrada por 30 minutos de inactividad'); }
+}
+setInterval(revisarInactividad, 30000);
+
+/* ---- navegación ---- */
 function renderNav(){
   const u = yo();
-  if(!u){ $('#nav').innerHTML=''; return; }
-  let items = [['inicio','Inicio']];
-  if(puedeComprobar(u)) items.push(['gastos','Mis gastos'],['enviar','Enviar periodo']);
-  if(autorizaA(u).length) items.push(['autorizar','Autorizar']);
-  if(u.rol==='contabilidad') items.push(['contab','Contabilidad'],['usuarios','Usuarios']);
-  if(u.rol==='admin') items.push(['dashboard','Dashboard']);
-  items.push(['salir','Salir']);
-  $('#nav').innerHTML = items.map(([k,l])=>`<button class="${vista===k?'on':''}" onclick="ir('${k}')">${l}</button>`).join('');
+  if(!u){ $('#nav').innerHTML = ''; return; }
+  let items = [];
+  if(debeCambiarClave(u)) items = [['salir','Salir']];
+  else {
+    items.push(['inicio','Inicio']);
+    if(puedeComprobar(u)) items.push(['gastos','Mis gastos'], ['enviar','Enviar periodo']);
+    if(puedeComprobar(u) && u.pago === 'anticipo') items.push(['anticipos','Anticipos']);
+    if(autorizaA(u).length){ const n = pendientesAutorizar(u); items.push(['autorizar', 'Autorizar' + (n ? `<span class="badge">${n}</span>` : '')]); }
+    if(u.rol === 'contabilidad') items.push(['contab','Contabilidad'], ['usuarios','Usuarios']);
+    if(u.rol === 'admin') items.push(['dashboard','Dashboard'], ['politicas','Políticas']);
+    items.push(['clave','Contraseña'], ['salir','Salir']);
+  }
+  $('#nav').innerHTML = items.map(([k,l]) => `<button class="${vista===k?'on':''}" onclick="ir('${k}')">${l}</button>`).join('');
 }
-function ir(v){ if(v==='salir'){ db.sesion=null; save(); vista='inicio'; } else vista=v; render(); }
-
+function ir(v){
+  aviso = null; editId = null; editUser = null;
+  if(v === 'salir'){ db.sesion = null; save(); vista = 'inicio'; }
+  else vista = v;
+  render(); window.scrollTo(0,0);
+}
 function render(){
   renderNav();
   const u = yo();
-  if(!u){ return login(); }
-  const fn = {inicio:vInicio, gastos:vGastos, enviar:vEnviar, autorizar:vAutorizar, contab:vContab, usuarios:vUsuarios, dashboard:vDashboard}[vista] || vInicio;
-  $('#app').innerHTML = fn(u);
+  if(!u) return login();
+  if(debeCambiarClave(u)){ $('#app').innerHTML = vClave(u, true); return; }
+  const fn = {inicio:vInicio, gastos:vGastos, enviar:vEnviar, anticipos:vAnticipos, autorizar:vAutorizar, contab:vContab,
+    usuarios:vUsuarios, dashboard:vDashboard, politicas:vPoliticas, clave:u => vClave(u, false)}[vista] || vInicio;
+  $('#app').innerHTML = (aviso ? `<div class="card alert ok">${aviso}</div>` : '') + fn(u);
 }
 
+/* ---- acceso ---- */
 function login(){
   $('#app').innerHTML = `
   <div class="card" style="max-width:380px;margin:40px auto">
     <h2>Ingresar</h2>
-    <label>Usuario</label><select id="lu">${db.usuarios.filter(u=>u.activo!==false).map(u=>`<option value="${u.id}">${u.nombre} (${ROLES[u.rol]})</option>`).join('')}</select>
-    <label>Contraseña</label><input id="lp" type="password" value="demo">
-    <p class="muted">Demo: contraseña "demo". Los usuarios nuevos entran con la contraseña temporal que les da contabilidad.</p>
-    <button class="primary" onclick="entrar()">Entrar</button>
+    <label>Usuario</label><input id="lu" autocomplete="username" autocapitalize="none">
+    <label>Contraseña</label><input id="lp" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')entrar()">
+    <div class="acciones"><button class="primary" onclick="entrar()">Entrar</button></div>
+    <p class="muted">¿Olvidó su contraseña? Pida a contabilidad que la restablezca.</p>
+    <p class="muted">Usuarios demo (contraseña <b>demo</b>): contabilidad, admin, autorizador, lider, vendedor, caja.amaga</p>
   </div>`;
 }
 function entrar(){
-  const u = usuario($('#lu').value);
-  if(!u || $('#lp').value!==u.password) return toast('Contraseña incorrecta');
-  db.sesion=u.id; vista='inicio'; save(); render();
+  const login = $('#lu').value.trim().toLowerCase();
+  const u = db.usuarios.find(x => x.login === login);
+  if(!u) return toast('Usuario o contraseña incorrectos');
+  if(u.activo === false) return toast('Usuario inactivo. Consulte con contabilidad.');
+  if(u.bloqueado) return toast('Usuario bloqueado. Pida a contabilidad que lo desbloquee.');
+  if($('#lp').value !== u.password){
+    u.intentos = (u.intentos || 0) + 1;
+    if(u.intentos >= MAX_INTENTOS){ u.bloqueado = true; save(); return toast('Usuario bloqueado por 5 intentos fallidos. Contabilidad debe desbloquearlo.'); }
+    save(); return toast(`Contraseña incorrecta. Le quedan ${MAX_INTENTOS - u.intentos} intento(s).`);
+  }
+  u.intentos = 0; db.sesion = u.id; per = periodoDefecto(u); vista = 'inicio'; tocar(); save(); render();
 }
-
-function vInicio(u){
-  const p = mesActual();
-  const mis = gastosPeriodo(u.id,p);
-  const total = mis.reduce((s,g)=>s+g.valor,0);
-  const estado = periodoEstado(u.id,p);
-  let extra='';
-  if(u.pago==='tarjeta') extra = `<p>Saldo de tarjeta: <b>${money(saldoTarjeta(u))}</b> de ${money(u.credito)}</p>`;
-  return `
-  <div class="card">
-    <h2>Hola, ${u.nombre}</h2>
-    <p class="muted">${u.puesto} · ${u.centro||'Sin centro'} · ${u.pago==='tarjeta'?'Tarjeta de crédito':u.pago==='anticipo'?'Anticipo':''}</p>
-    ${extra}
-    <p>Periodo ${p}: <span class="tag ${estado==='abierto'?'':'warn'}">${estado}</span></p>
-    <p class="total">${money(total)}</p>
-    <p class="muted">${mis.length} gasto(s) registrados este mes</p>
-    <p class="muted">Radicación: primeros días del mes.</p>
+function vClave(u, forzado){
+  return `<div class="card" style="max-width:420px;margin:20px auto">
+    <h2>Cambiar contraseña</h2>
+    ${forzado ? `<div class="alert">${u.cambiarClave ? 'Debe cambiar la contraseña temporal antes de continuar.' : 'Su contraseña tiene más de 90 días. Cámbiela para continuar.'}</div>` : ''}
+    <label>Contraseña actual</label><input id="ca" type="password" autocomplete="current-password">
+    <label>Nueva contraseña</label><input id="cn" type="password" autocomplete="new-password">
+    <label>Confirmar nueva contraseña</label><input id="cc" type="password" autocomplete="new-password">
+    <p class="muted">Mínimo 8 caracteres, con letras y números. Se pide cambiarla cada 90 días.</p>
+    <div class="acciones"><button class="primary" onclick="guardarClave()">Guardar</button></div>
   </div>`;
 }
+function guardarClave(){
+  const u = yo(), a = $('#ca').value, n = $('#cn').value;
+  if(a !== u.password) return toast('La contraseña actual no coincide');
+  if(!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(n)) return toast('Mínimo 8 caracteres, con letras y números');
+  if(n === a) return toast('La nueva contraseña debe ser distinta');
+  if(n !== $('#cc').value) return toast('La confirmación no coincide');
+  u.password = n; u.cambiarClave = false; u.claveFecha = hoy(); save();
+  vista = 'inicio'; toast('Contraseña actualizada'); render();
+}
+
+/* ---- inicio ---- */
+function pendientesAutorizar(u){
+  const mios = autorizaA(u).map(x => x.id);
+  return db.periodos.filter(p => p.estado === 'enviado' && mios.includes(p.userId)).length
+       + db.anticipos.filter(a => a.estado === 'solicitado' && mios.includes(a.userId)).length;
+}
+function vInicio(u){
+  let h = `<div class="card"><h2>Hola, ${esc(u.nombre)}</h2>
+    <p class="muted">${esc(u.puesto)} · ${esc(u.centro || 'Sin centro')}${u.pago ? ' · ' + PAGOS[u.pago] : ''}</p>`;
+  if(puedeComprobar(u)){
+    if(u.pago === 'tarjeta') h += `<p>Saldo de tarjeta: <b>${money(saldoTarjeta(u))}</b> de ${money(u.credito)}</p>`;
+    if(u.pago === 'caja') h += `<p>Disponible en caja: <b>${money(disponibleCaja(u))}</b> de ${money(u.montoCaja)}</p>
+      <p class="muted">Encargado: ${esc(u.encargado || 'por definir')}. Lo gastado se repone al finiquitar la comprobación.</p>`;
+    if(u.pago === 'anticipo'){ const a = anticipoAbierto(u); h += a ? `<p>Anticipo vigente: <b>${money(a.monto)}</b> ${tagEstado(a.estado)}</p>` : `<p class="muted">Sin anticipo vigente.</p>`; }
+    const ant = mesAnterior(), eAnt = estadoPer(u.id, ant), nAnt = gastosDe(u.id, ant).length, dia = Number(hoy().slice(8));
+    if(eAnt === 'abierto' && nAnt){
+      h += dia <= DIA_LIMITE
+        ? `<div class="alert">Radique la comprobación de <b>${mesNombre(ant)}</b> antes del día ${DIA_LIMITE}. Tiene ${nAnt} gasto(s) sin enviar.</div>`
+        : `<div class="alert bad">La comprobación de <b>${mesNombre(ant)}</b> está vencida (plazo: día ${DIA_LIMITE}). Envíela cuanto antes.</div>`;
+      h += `<button class="primary" onclick="per='${ant}';ir('enviar')">Enviar ${mesNombre(ant)}</button>`;
+    }
+    db.periodos.filter(p => p.userId === u.id && p.estado === 'devuelto').forEach(p => {
+      h += `<div class="alert bad">Tiene gastos devueltos en <b>${mesNombre(p.periodo)}</b>. Corríjalos y reenvíe.
+        <div class="acciones"><button class="ghost" onclick="per='${p.periodo}';ir('gastos')">Ver devueltos</button></div></div>`;
+    });
+    const p = mesActual(), mis = gastosDe(u.id, p);
+    h += `<h3>${mesNombre(p)} ${tagEstado(estadoPer(u.id, p))}</h3><p class="total">${money(sum(mis))}</p>
+      <p class="muted">${mis.length} gasto(s) registrados · radicación en los primeros ${DIA_LIMITE} días del mes siguiente.</p>
+      <div class="acciones"><button class="primary" onclick="per='${p}';ir('gastos')">Registrar gasto</button></div>`;
+  }
+  h += '</div>';
+  if(autorizaA(u).length){
+    const n = pendientesAutorizar(u);
+    h += `<div class="card"><h2>Por autorizar</h2><p>${n ? `<b>${n}</b> pendiente(s) de su revisión.` : 'Nada pendiente.'}</p>
+      ${n ? `<button class="primary" onclick="ir('autorizar')">Revisar</button>` : ''}</div>`;
+  }
+  if(u.rol === 'contabilidad'){
+    const aut = db.periodos.filter(p => p.estado === 'autorizado').length;
+    const dep = db.anticipos.filter(a => a.estado === 'autorizado').length;
+    h += `<div class="card"><h2>Contabilidad</h2><p>${aut} periodo(s) por finiquitar · ${dep} anticipo(s) por depositar</p>
+      <button class="primary" onclick="ir('contab')">Ir a contabilidad</button></div>`;
+  }
+  if(u.rol === 'admin') h += `<div class="card"><h2>Administración</h2><button class="primary" onclick="ir('dashboard')">Ver dashboard</button></div>`;
+  return h;
+}
+
+/* ---- gastos ---- */
+function editable(u, g){
+  const e = estadoPer(u.id, g.periodo);
+  return (e === 'abierto' && g.estado === 'borrador') || (e === 'devuelto' && ['devuelto','borrador'].includes(g.estado));
+}
+function thumb(g){
+  if(g.foto) return `<img class="thumb" src="${g.foto}" alt="Ticket" onclick="verFoto('${g.id}')">`;
+  return `<span class="muted">${g.fotoArchivada ? 'archivada' : 'sin foto'}</span>`;
+}
+function verFoto(id){ const g = db.gastos.find(x => x.id === id); if(!g?.foto) return; $('#modal img').src = g.foto; $('#modal').classList.remove('hidden'); }
 
 function vGastos(u){
-  const p = mesActual();
-  const abierto = periodoEstado(u.id,p)==='abierto';
-  const lista = gastosPeriodo(u.id,p);
+  if(!per) per = periodoDefecto(u);
+  const estado = estadoPer(u.id, per);
+  const lista = gastosDe(u.id, per);
+  const g = editId ? db.gastos.find(x => x.id === editId) : null;
+  let cab = '';
+  if(g) cab = `<h2>${g.estado === 'devuelto' ? 'Corregir gasto devuelto' : 'Editar gasto'}</h2>
+    ${g.devolucion ? `<div class="alert bad">Comentario del autorizador: ${esc(g.devolucion)}</div>` : ''}` + formGasto(u, g);
+  else if(estado === 'abierto') cab = `<h2>Registrar gasto · ${mesNombre(per)}</h2>` + formGasto(u, null);
+  else if(estado === 'devuelto') cab = `<h2>${mesNombre(per)}: devuelto</h2><div class="alert bad">Corrija o elimine los gastos marcados como devueltos y reenvíe desde <b>Enviar periodo</b>. Los gastos aprobados ya no se tocan.</div>`;
+  else cab = `<h2>${mesNombre(per)}: ${ESTADO_PER[estado]}</h2><p class="muted">El periodo ya fue enviado. Los gastos quedan bloqueados.</p>
+    ${estadoPer(u.id, mesActual()) === 'abierto' && per !== mesActual() ? `<button class="primary" onclick="per='${mesActual()}';render()">Registrar en ${mesNombre(mesActual())}</button>` : ''}`;
   return `
+  <div class="card">${selectorPeriodo(u)}</div>
+  <div class="card">${cab}</div>
   <div class="card">
-    <h2>Registrar gasto</h2>
-    ${abierto ? formGasto(u) : '<p class="muted">El periodo está enviado. Los gastos quedan bloqueados.</p>'}
-  </div>
-  <div class="card">
-    <h2>Gastos del periodo ${p}</h2>
-    <table>
-      <tr><th>Fecha</th><th>Concepto</th><th>Centro</th><th>Medio</th><th class="muted">Valor</th><th></th></tr>
-      ${lista.map(g=>`<tr>
-        <td>${g.fecha}</td><td>${nombreConcepto(g.concepto)}${g.empresa?`<br><span class="muted">${g.empresa}</span>`:''}</td>
-        <td>${g.centro}</td><td>${g.medio}</td><td>${money(g.valor)}</td>
-        <td>${abierto?`<button class="danger" onclick="borrarGasto('${g.id}')">Eliminar</button>`:`<span class="tag ${g.estado==='devuelto'?'bad':'ok'}">${g.estado}</span>`}</td>
-      </tr>`).join('') || '<tr><td colspan="6" class="muted">Sin gastos</td></tr>'}
-    </table>
+    <h2>Gastos de ${mesNombre(per)} · ${money(sum(lista))}</h2>
+    ${tabla(`<tr><th>Fecha</th><th>Concepto</th><th>Centro</th><th>Medio</th><th class="num">Valor</th><th>Ticket</th><th>Estado</th><th></th></tr>
+      ${lista.map(x => `<tr class="${x.estado==='devuelto'?'devuelto':''}">
+        <td>${x.fecha}</td>
+        <td>${esc(nombreConcepto(x.concepto))}${x.empresa ? `<br><span class="muted">${esc(x.empresa)}</span>` : ''}${x.devolucion && x.estado==='devuelto' ? `<br><span class="muted" style="color:var(--bad)">${esc(x.devolucion)}</span>` : ''}</td>
+        <td>${esc(x.centro)}</td><td>${MEDIOS[x.medio] || esc(x.medio)}</td><td class="num">${money(x.valor)}</td><td>${thumb(x)}</td>
+        <td>${x.estado === 'borrador' ? (x.corregido ? '<span class="tag">corregido</span>' : '<span class="tag">borrador</span>') : tagEstado(x.estado)}</td>
+        <td>${editable(u, x) ? `<div style="display:flex;gap:6px"><button class="ghost sm" onclick="editarGasto('${x.id}')">${x.estado==='devuelto'?'Corregir':'Editar'}</button><button class="danger sm" onclick="borrarGasto('${x.id}')">Eliminar</button></div>` : ''}</td>
+      </tr>`).join('') || '<tr><td colspan="8" class="muted">Sin gastos</td></tr>'}`)}
   </div>`;
 }
 
-function formGasto(u){
+function opcionesMedio(u){
+  if(u.pago === 'caja') return {caja:'Caja menor (efectivo)'};
+  if(u.pago === 'anticipo') return {anticipo:'Efectivo del anticipo', tarjeta:'Tarjeta de crédito'};
+  return {tarjeta:'Tarjeta de crédito', efectivo:'Efectivo (no aceptan tarjeta)'};
+}
+function formGasto(u, g){
+  g = g || {};
+  const max = hoy() < ultimoDia(per) ? hoy() : ultimoDia(per);
+  const fecha = g.fecha || (per === mesActual() ? hoy() : max);
+  const c = concepto(g.concepto || CONCEPTOS[0].id);
   return `
   <div class="row">
-    <div><label>Fecha del ticket</label><input id="gf" type="date" value="${hoy()}"></div>
+    <div><label>Fecha del ticket</label><input id="gf" type="date" value="${fecha}" min="${per}-01" max="${max}"></div>
     <div><label>Concepto</label>
-      <select id="gc" onchange="ajustarForm()">${CONCEPTOS.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div>
+      <select id="gc" onchange="ajustarForm()">${CONCEPTOS.map(x => `<option value="${x.id}" ${x.id===c.id?'selected':''}>${x.nombre}</option>`).join('')}</select></div>
   </div>
   <div class="row">
-    <div><label>Valor total (COP)</label><input id="gv" type="number" min="0" oninput="validarTope()"></div>
-    <div><label>Centro de costos</label><select id="gcc">${CENTROS.map(c=>`<option ${c===u.centro?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div><label>Valor total (COP)</label><input id="gv" type="number" min="0" inputmode="numeric" value="${g.valor || ''}" oninput="validarTope()"></div>
+    <div><label>Centro de costos</label><select id="gcc">${db.centros.map(x => `<option ${x===(g.centro||u.centro)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
   </div>
   <div class="row">
-    <div><label>Medio de pago</label><select id="gm"><option value="tarjeta">Tarjeta de crédito</option><option value="efectivo">Efectivo</option></select></div>
-    <div><label>Foto del ticket</label><input id="gfoto" type="file" accept="image/*"><p class="muted">La app lee fecha y valor como sugerencia; confirme antes de guardar.</p></div>
+    <div><label>Medio de pago</label><select id="gm">${Object.entries(opcionesMedio(u)).map(([k,l]) => `<option value="${k}" ${g.medio===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div><label>Foto del ticket</label><input id="gfoto" type="file" accept="image/*" capture="environment">
+      <p class="muted">${g.foto ? 'Ya tiene foto guardada; suba otra solo si quiere reemplazarla.' : 'Obligatoria. Toque para tomar la foto.'}</p></div>
   </div>
-  <div id="extras"></div>
-  <div id="avisoTope"></div>
-  <label><input id="gfact" type="checkbox" style="width:auto"> Factura ya enviada al correo de la empresa</label>
-  <div style="margin-top:12px"><button class="primary" onclick="guardarGasto()">Guardar gasto</button></div>`;
+  <div id="extras">${extrasHtml(c, g)}</div>
+  <div id="avisoTope">${avisoTopeHtml(c, g.valor, g.nPersonas, g.comentario)}</div>
+  <label class="ck"><input id="gfact" type="checkbox" ${g.factura?'checked':''}> Factura ya enviada al correo de la empresa</label>
+  <p class="muted">No se reconocen: licor, gastos personales ni antojos de media mañana o tarde.</p>
+  <div class="acciones"><button class="primary" id="btnGuardar" onclick="guardarGasto()">${editId ? 'Guardar cambios' : 'Guardar gasto'}</button>
+    ${editId ? `<button class="ghost" onclick="editId=null;render()">Cancelar</button>` : ''}</div>`;
 }
-
-function ajustarForm(){
-  const c = CONCEPTOS.find(x=>x.id===$('#gc').value);
-  let h='';
-  if(c.cliente) h += `<div class="row"><div><label>Empresa</label><input id="gemp"></div><div><label>Nombres de las personas</label><input id="gper"></div></div>
-    <div class="row"><div><label>Número de personas</label><input id="gn" type="number" min="1" value="1" oninput="validarTope()"></div><div></div></div>`;
-  if(c.obsequio) h += `<label>Nombre del cliente</label><input id="gemp">`;
-  if(c.comidaIndividual) h += `<label><input id="gfuera" type="checkbox" style="width:auto"> Fuera de la ciudad de residencia o pernocta (requerido para comidas individuales)</label>`;
-  $('#extras').innerHTML = h;
-  validarTope();
+function extrasHtml(c, g = {}){
+  let h = '';
+  if(c.cliente) h += `<div class="row"><div><label>Empresa</label><input id="gemp" value="${esc(g.empresa)}"></div><div><label>Nombres de las personas</label><input id="gper" value="${esc(g.personas)}"></div></div>
+    <div class="row"><div><label>Número de personas</label><input id="gn" type="number" min="1" value="${g.nPersonas || 1}" oninput="validarTope()"></div><div></div></div>`;
+  if(c.obsequio) h += `<label>Nombre del cliente</label><input id="gemp" value="${esc(g.empresa)}">`;
+  if(c.comidaIndividual) h += `<label class="ck"><input id="gfuera" type="checkbox" ${g.fuera?'checked':''}> Fuera de la ciudad de residencia o con pernocta (requerido para comidas individuales)</label>`;
+  return h;
 }
-
+function avisoTopeHtml(c, valor, n, comentario){
+  const tope = db.topes[c.id];
+  const real = c.porPersona ? Number(valor||0) / Math.max(Number(n||1), 1) : Number(valor||0);
+  if(!(tope && real > tope)) return '';
+  return `<div class="alert">Este gasto supera el presupuesto ${c.porPersona ? 'por persona ' : ''}(${money(tope)}). Escriba el detalle del motivo.
+    <textarea id="gcom" rows="2" placeholder="Motivo">${esc(comentario)}</textarea></div>`;
+}
+function ajustarForm(){ const c = concepto($('#gc').value); $('#extras').innerHTML = extrasHtml(c); validarTope(); }
 function validarTope(){
-  const c = CONCEPTOS.find(x=>x.id===$('#gc')?.value);
-  const v = Number($('#gv')?.value||0);
-  const n = Number($('#gn')?.value||1);
-  const tope = c ? TOPES[c.id] : null;
-  const real = c?.porPersona ? v/Math.max(n,1) : v;
-  $('#avisoTope').innerHTML = (tope && real>tope)
-    ? `<div class="alert">Este gasto supera el presupuesto ${c.porPersona?'por persona':''} (${money(tope)}). Escriba el detalle del motivo.<textarea id="gcom" rows="2" placeholder="Motivo"></textarea></div>` : '';
+  const c = concepto($('#gc').value), prev = $('#gcom')?.value || '';
+  $('#avisoTope').innerHTML = avisoTopeHtml(c, $('#gv').value, $('#gn')?.value, prev);
+}
+function comprimir(file, max = 1100, q = 0.6){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas'); cv.width = Math.round(img.width*k); cv.height = Math.round(img.height*k);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+      res(cv.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('imagen')); };
+    img.src = url;
+  });
+}
+async function guardarGasto(){
+  const u = yo(), c = concepto($('#gc').value);
+  const edit = editId ? db.gastos.find(x => x.id === editId) : null;
+  const fecha = $('#gf').value;
+  if(!fecha) return toast('Ingrese la fecha del ticket');
+  if(fecha > hoy()) return toast('La fecha no puede ser futura');
+  if(fecha.slice(0,7) !== per) return toast(`La fecha debe estar dentro de ${mesNombre(per)}`);
+  if(!edit && estadoPer(u.id, per) !== 'abierto') return toast(`${mesNombre(per)} ya fue enviado; no admite gastos nuevos`);
+  const valor = Number($('#gv').value || 0);
+  if(!(valor > 0)) return toast('Ingrese el valor');
+  const file = $('#gfoto').files[0];
+  if(!file && !edit?.foto) return toast('Adjunte la foto del ticket');
+  const empresa = $('#gemp')?.value.trim() || '', personas = $('#gper')?.value.trim() || '';
+  const nPersonas = Number($('#gn')?.value || 1);
+  if(c.obsequio && !empresa) return toast('Nombre del cliente requerido');
+  if(c.cliente && (!empresa || !personas)) return toast('Empresa y nombres de las personas requeridos');
+  if(c.comidaIndividual && !$('#gfuera')?.checked) return toast('Comida individual solo aplica fuera de la ciudad o con pernocta');
+  const tope = db.topes[c.id], real = c.porPersona ? valor / Math.max(nPersonas, 1) : valor;
+  const comentario = $('#gcom')?.value.trim() || '';
+  if(tope && real > tope && !comentario) return toast('Escriba el motivo del sobrepresupuesto');
+  $('#btnGuardar').disabled = true;
+  let foto = edit?.foto || null;
+  if(file){ try { foto = await comprimir(file); } catch(e){ $('#btnGuardar').disabled = false; return toast('No se pudo leer la imagen'); } }
+  const datos = {fecha, periodo:per, concepto:c.id, valor, centro:$('#gcc').value, medio:$('#gm').value,
+    empresa, personas: c.cliente ? personas : '', nPersonas: c.cliente ? nPersonas : 1, cliente:!!c.cliente,
+    fuera: !!$('#gfuera')?.checked, factura: $('#gfact').checked, comentario, foto};
+  const respaldo = JSON.stringify(db);
+  if(edit) Object.assign(edit, datos, {estado:'borrador', corregido: edit.corregido || edit.estado === 'devuelto'});
+  else db.gastos.push({id:'g' + Date.now(), userId:u.id, estado:'borrador', devolucion:'', ...datos});
+  try { save(); }
+  catch(e){ db = JSON.parse(respaldo); $('#btnGuardar').disabled = false; return toast('Este navegador ya no tiene espacio para más fotos (límite del prototipo)'); }
+  editId = null; toast(edit ? 'Gasto actualizado' : 'Gasto guardado'); render();
+}
+function editarGasto(id){ editId = id; render(); window.scrollTo(0,0); }
+function borrarGasto(id){
+  if(!confirm('¿Eliminar este gasto?')) return;
+  db.gastos = db.gastos.filter(g => g.id !== id); if(editId === id) editId = null; save(); render();
 }
 
-function guardarGasto(){
-  const u = yo();
-  const c = CONCEPTOS.find(x=>x.id===$('#gc').value);
-  const valor = Number($('#gv').value||0);
-  if(!valor){ return toast('Ingrese el valor'); }
-  if(!$('#gfoto').files.length){ return toast('Adjunte la foto del ticket'); }
-  if(c.obsequio && !$('#gemp')?.value){ return toast('Nombre del cliente requerido'); }
-  if(c.cliente && (!$('#gemp')?.value || !$('#gper')?.value)){ return toast('Empresa y nombres requeridos'); }
-  if(c.comidaIndividual && !$('#gfuera')?.checked){ return toast('Comida individual solo fuera de ciudad o con pernocta'); }
-  const tope = TOPES[c.id];
-  const real = c.porPersona ? valor/Math.max(Number($('#gn')?.value||1),1) : valor;
-  if(tope && real>tope && !$('#gcom')?.value){ return toast('Escriba el motivo del sobrepresupuesto'); }
-  db.gastos.push({id:'g'+Date.now(), userId:u.id, periodo:mesActual(), fecha:$('#gf').value, concepto:c.id, valor,
-    centro:$('#gcc').value, medio:$('#gm').value, empresa:$('#gemp')?.value||'', personas:$('#gper')?.value||'',
-    nPersonas:Number($('#gn')?.value||1), cliente:!!c.cliente, estado:'borrador', comentario:$('#gcom')?.value||'', foto:true});
-  save(); toast('Gasto guardado'); render();
-}
-
-function borrarGasto(id){ db.gastos = db.gastos.filter(g=>g.id!==id); save(); render(); }
-
+/* ---- envío del periodo ---- */
+function textoEnvio(u, p, lista){ return `Comprobación ${mesNombre(p)} completada. ${lista.length} gasto(s) por ${money(sum(lista))}. ${u.nombre}. Revisar en TU comprobación.`; }
 function vEnviar(u){
-  const p = mesActual();
-  const lista = gastosPeriodo(u.id,p).filter(g=>g.estado!=='aprobado');
-  const total = lista.reduce((s,g)=>s+g.valor,0);
-  const estado = periodoEstado(u.id,p);
+  if(!per) per = periodoDefecto(u);
+  const estado = estadoPer(u.id, per), r = perRec(u.id, per);
+  const todos = gastosDe(u.id, per), lista = todos.filter(g => g.estado === 'borrador');
   const aut = usuario(u.autoriza);
-  if(estado!=='abierto') return `<div class="card"><h2>Periodo ${p}: ${estado}</h2><p class="muted">Ya fue enviado${aut?' a '+aut.nombre:''}.</p></div>`;
-  if(!aut) return `<div class="card"><h2>Enviar periodo ${p}</h2><div class="alert">No tiene autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div></div>`;
-  return `
-  <div class="card">
-    <h2>Enviar periodo ${p}</h2>
-    <p>${lista.length} gasto(s) por <b class="total">${money(total)}</b></p>
-    <p class="muted">Lo autoriza: <b>${aut.nombre}</b> (${aut.puesto}). Al enviar, los gastos quedan bloqueados hasta la revisión.</p>
-    <button class="primary" onclick="enviarPeriodo()" ${lista.length?'':'disabled'}>Enviar a autorización</button>
-    ${lista.length ? `<div class="alert">Luego aparece el botón <b>Avisar al autorizador</b> (WhatsApp) con el mensaje "Comprobación ${mesNombre(p)} completada".</div>` : ''}
-  </div>`;
+  let h = `<div class="card">${selectorPeriodo(u)}</div><div class="card"><h2>Enviar ${mesNombre(per)}</h2>`;
+  if(estado === 'enviado'){
+    const env = todos.filter(g => g.estado === 'enviado');
+    h += `<p>Enviado${aut ? ` a <b>${esc(aut.nombre)}</b>` : ''} el ${r.enviado}. ${tagEstado('enviado')}</p>
+      <p class="muted">${env.length} gasto(s) por revisar. Los gastos quedan bloqueados hasta la revisión.</p>
+      ${aut ? btnWa('avisar a ' + aut.nombre, aut.telefono, textoEnvio(u, per, env)) : ''}`;
+  } else if(estado === 'autorizado'){
+    h += `<div class="alert ok">Autorizado el ${r.autorizado}. Pasó a contabilidad para finiquitar.</div><p class="total">${money(sum(todos))}</p>`;
+  } else if(estado === 'finiquitado'){
+    h += `<div class="alert ok">Finiquitado por contabilidad el ${r.finiquitado}.</div><p class="total">${money(r.total)}</p>${resumenSaldo(u, r)}`;
+  } else if(!aut){
+    h += `<div class="alert">No tiene autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div>`;
+  } else {
+    const devueltos = todos.filter(g => g.estado === 'devuelto');
+    if(estado === 'devuelto' && devueltos.length)
+      h += `<div class="alert bad">Faltan ${devueltos.length} gasto(s) devuelto(s) por corregir o eliminar.</div>
+        <button class="ghost" onclick="ir('gastos')">Ir a corregir</button>`;
+    else {
+      const porC = {}; lista.forEach(g => porC[g.concepto] = (porC[g.concepto] || 0) + g.valor);
+      h += `<p>${lista.length} gasto(s) ${estado === 'devuelto' ? 'corregidos ' : ''}por <b class="total">${money(sum(lista))}</b></p>
+        ${lista.length ? tabla(Object.entries(porC).map(([k,v]) => `<tr><td>${nombreConcepto(k)}</td><td class="num">${money(v)}</td></tr>`).join('')) : ''}
+        <p class="muted">Lo autoriza: <b>${esc(aut.nombre)}</b> (${esc(aut.puesto)}). Al enviar, los gastos quedan bloqueados hasta la revisión.</p>
+        <button class="primary" onclick="enviarPeriodo()" ${lista.length ? '' : 'disabled'}>${estado === 'devuelto' ? 'Reenviar corregidos' : 'Enviar a autorización'}</button>`;
+    }
+  }
+  return h + '</div>';
 }
-function mesNombre(p){ return ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][Number(p.slice(5))-1]; }
 function enviarPeriodo(){
-  const u = yo(); const p = mesActual();
-  db.periodos.push({userId:u.id, periodo:p, estado:'enviado', enviado:hoy()});
-  gastosPeriodo(u.id,p).forEach(g=>g.estado='enviado');
-  save(); toast('Periodo enviado'); vista='enviar'; render();
+  const u = yo(), lista = gastosDe(u.id, per).filter(g => g.estado === 'borrador');
+  if(!lista.length) return;
+  if(per === mesActual() && !confirm(`${mesNombre(per)} aún no termina. Normalmente se envía al cerrar el mes. ¿Enviar de todas formas?`)) return;
+  let r = perRec(u.id, per);
+  if(!r){ r = {userId:u.id, periodo:per}; db.periodos.push(r); }
+  r.estado = 'enviado'; r.enviado = hoy(); r.envios = (r.envios || 0) + 1;
+  lista.forEach(g => g.estado = 'enviado');
+  save(); toast('Periodo enviado. Avise al autorizador por WhatsApp.'); render();
+}
+function resumenSaldo(u, r){
+  if(u.pago === 'anticipo' && r.diferencia != null){
+    if(r.diferencia > 0) return `<div class="alert">Anticipo ${money(r.anticipo)} · sobrante ${money(r.diferencia)} a devolver en los primeros días del mes.</div>`;
+    if(r.diferencia < 0) return `<div class="alert">Anticipo ${money(r.anticipo)} · faltante ${money(-r.diferencia)} a depositar por contabilidad.</div>`;
+    return `<div class="alert ok">Anticipo ${money(r.anticipo)} · saldo en cero.</div>`;
+  }
+  if(u.pago === 'caja') return `<p class="muted">Reposición de caja: ${money(r.total)}.</p>`;
+  if(u.pago === 'tarjeta') return `<p class="muted">Pago de tarjeta registrado: ${money(sum(gastosDe(u.id, r.periodo).filter(g => g.medio === 'tarjeta')))}.</p>`;
+  return '';
 }
 
+/* ---- anticipos ---- */
+function vAnticipos(u){
+  const abierto = anticipoAbierto(u), jefe = usuario(u.autoriza), cont = contabilidad();
+  const mios = db.anticipos.filter(a => a.userId === u.id).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  let h = `<div class="card"><h2>Solicitar anticipo</h2>`;
+  if(abierto){
+    h += `<p>Anticipo de <b>${money(abierto.monto)}</b> ${tagEstado(abierto.estado)}</p>
+      <p class="muted">No puede solicitar otro hasta que este quede comprobado (se comprueba al finiquitar su periodo).</p>`;
+    if(abierto.estado === 'solicitado'){
+      const t = `Solicitud de anticipo: ${money(abierto.monto)}. Motivo: ${abierto.motivo}. ${u.nombre}.`;
+      h += (cont ? btnWa('avisar a contabilidad', cont.telefono, t) : '') + (jefe ? btnWa('avisar a ' + jefe.nombre, jefe.telefono, t + ' Pendiente de su autorización en TU comprobación.') : '');
+    }
+  } else if(!jefe){
+    h += `<div class="alert">No tiene jefe/autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div>`;
+  } else {
+    h += `<div class="row"><div><label>Monto (COP)</label><input id="am" type="number" min="0" inputmode="numeric"></div>
+      <div><label>Motivo</label><input id="amo" placeholder="Ej.: gira Costa, 12 al 16 de noviembre"></div></div>
+      <p class="muted">Lo autoriza ${esc(jefe.nombre)}; luego contabilidad deposita y lo confirma en la app.</p>
+      <div class="acciones"><button class="primary" onclick="solicitarAnticipo()">Solicitar</button></div>`;
+  }
+  h += `</div><div class="card"><h2>Historial</h2>${tabla(`<tr><th>Fecha</th><th class="num">Monto</th><th>Motivo</th><th>Estado</th></tr>
+    ${mios.map(a => `<tr><td>${a.fecha}</td><td class="num">${money(a.monto)}</td><td>${esc(a.motivo)}${a.rechazo ? `<br><span class="muted">${esc(a.rechazo)}</span>` : ''}</td><td>${tagEstado(a.estado)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin anticipos</td></tr>'}`)}</div>`;
+  return h;
+}
+function solicitarAnticipo(){
+  const u = yo(), monto = Number($('#am').value || 0), motivo = $('#amo').value.trim();
+  if(anticipoAbierto(u)) return toast('Tiene un anticipo sin comprobar');
+  if(!(monto > 0)) return toast('Ingrese el monto');
+  if(!motivo) return toast('Escriba el motivo');
+  db.anticipos.push({id:'a' + Date.now(), userId:u.id, monto, motivo, estado:'solicitado', fecha:hoy()});
+  save(); toast('Anticipo solicitado. Avise por WhatsApp.'); render();
+}
+
+/* ---- autorizar ---- */
 function vAutorizar(u){
-  const pend = db.periodos.filter(p=>p.estado==='enviado' && p.userId!==u.id && usuario(p.userId)?.autoriza===u.id);
-  if(!pend.length) return `<div class="card"><h2>Autorizar</h2><p class="muted">No hay periodos pendientes.</p></div>`;
-  return pend.map(p=>{
-    const dueno = usuario(p.userId);
-    const gs = gastosPeriodo(p.userId,p.periodo);
-    return `<div class="card"><h2>${dueno.nombre} · ${p.periodo}</h2>
-      <table>
-        <tr><th><input type="checkbox" onclick="todos('${p.userId}',this.checked)"></th><th>Fecha</th><th>Concepto</th><th>Valor</th><th>Comentario</th></tr>
-        ${gs.map(g=>`<tr><td><input type="checkbox" class="ck-${p.userId}" value="${g.id}"></td>
-          <td>${g.fecha}</td><td>${nombreConcepto(g.concepto)}</td><td>${money(g.valor)}</td>
-          <td><input id="c-${g.id}" placeholder="Si devuelve, explique"></td></tr>`).join('')}
-      </table>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+  const mios = autorizaA(u).map(x => x.id);
+  const ants = db.anticipos.filter(a => a.estado === 'solicitado' && mios.includes(a.userId));
+  const pend = db.periodos.filter(p => p.estado === 'enviado' && mios.includes(p.userId));
+  let h = '';
+  if(ants.length) h += `<div class="card"><h2>Anticipos por autorizar</h2>${tabla(`<tr><th>Colaborador</th><th>Fecha</th><th class="num">Monto</th><th>Motivo</th><th></th></tr>
+    ${ants.map(a => `<tr><td>${esc(usuario(a.userId).nombre)}</td><td>${a.fecha}</td><td class="num">${money(a.monto)}</td><td>${esc(a.motivo)}</td>
+      <td><div style="display:flex;gap:6px"><button class="primary sm" onclick="resolverAnticipo('${a.id}',true)">Autorizar</button><button class="danger sm" onclick="resolverAnticipo('${a.id}',false)">Rechazar</button></div></td></tr>`).join('')}`)}</div>`;
+  h += pend.map(p => {
+    const d = usuario(p.userId), gs = gastosDe(p.userId, p.periodo), rev = gs.filter(g => g.estado === 'enviado');
+    const aprob = gs.filter(g => g.estado === 'aprobado');
+    return `<div class="card"><h2>${esc(d.nombre)} · ${mesNombre(p.periodo)}</h2>
+      <p class="muted">${esc(d.puesto)} · ${PAGOS[d.pago] || ''} · envío #${p.envios || 1} del ${p.enviado}${aprob.length ? ` · ${aprob.length} gasto(s) ya aprobado(s) por ${money(sum(aprob))}` : ''}</p>
+      ${tabla(`<tr><th><input type="checkbox" title="Seleccionar todo" onclick="todos('${p.userId}',this.checked)"></th><th>Fecha</th><th>Concepto</th><th class="num">Valor</th><th>Ticket</th><th>Detalle</th><th>Si devuelve, explique</th></tr>
+        ${rev.map(g => { const c = concepto(g.concepto), tope = db.topes[g.concepto];
+          const pp = c.porPersona ? g.valor / Math.max(g.nPersonas || 1, 1) : g.valor;
+          return `<tr><td><input type="checkbox" class="ck-${p.userId}" value="${g.id}"></td>
+          <td>${g.fecha}</td><td>${esc(c.nombre)}${g.corregido ? ' <span class="tag">corregido</span>' : ''}</td>
+          <td class="num">${money(g.valor)}${c.porPersona ? `<br><span class="muted">${money(pp)} c/u</span>` : ''}</td><td>${thumb(g)}</td>
+          <td class="muted">${[g.empresa && esc(g.empresa), g.personas && esc(g.personas) + ` (${g.nPersonas})`, c.comidaIndividual && g.fuera && 'fuera de ciudad/pernocta',
+            MEDIOS[g.medio], esc(g.centro), g.factura ? 'factura enviada' : 'sin factura', tope && pp > tope ? `<b style="color:var(--warn)">supera tope: ${esc(g.comentario)}</b>` : ''].filter(Boolean).join(' · ')}</td>
+          <td><input id="c-${g.id}" placeholder="Comentario"></td></tr>`; }).join('')}`)}
+      <p>Por revisar: <b>${money(sum(rev))}</b></p>
+      <div class="acciones">
         <button class="primary" onclick="resolver('${p.userId}','${p.periodo}','aprobar')">Aprobar seleccionados</button>
         <button class="danger" onclick="resolver('${p.userId}','${p.periodo}','devolver')">Devolver seleccionados</button>
       </div></div>`;
   }).join('');
+  return h || `<div class="card"><h2>Autorizar</h2><p class="muted">No hay pendientes.</p></div>`;
 }
-function todos(userId, on){ document.querySelectorAll('.ck-'+userId).forEach(c=>c.checked=on); }
+function todos(userId, on){ document.querySelectorAll('.ck-' + userId).forEach(c => c.checked = on); }
 function resolver(userId, periodo, accion){
-  const ids = [...document.querySelectorAll('.ck-'+userId+':checked')].map(c=>c.value);
+  const ids = [...document.querySelectorAll('.ck-' + userId + ':checked')].map(c => c.value);
   if(!ids.length) return toast('Seleccione gastos');
-  if(accion==='devolver'){
-    const sinMotivo = ids.find(id=>!$('#c-'+id).value.trim());
-    if(sinMotivo) return toast('Escriba el comentario de cada devuelto');
-  }
-  ids.forEach(id=>{
-    const g = db.gastos.find(x=>x.id===id);
-    g.estado = accion==='aprobar' ? 'aprobado' : 'devuelto';
-    g.comentario = accion==='devolver' ? $('#c-'+id).value : g.comentario;
+  if(accion === 'devolver' && ids.some(id => !$('#c-' + id).value.trim())) return toast('Escriba el comentario de cada gasto devuelto');
+  ids.forEach(id => {
+    const g = db.gastos.find(x => x.id === id);
+    if(accion === 'aprobar'){ g.estado = 'aprobado'; }
+    else { g.estado = 'devuelto'; g.devolucion = $('#c-' + id).value.trim(); }
   });
-  const gs = gastosPeriodo(userId,periodo);
-  const p = db.periodos.find(x=>x.userId===userId && x.periodo===periodo);
-  if(gs.every(g=>g.estado==='aprobado')){ p.estado='autorizado'; toast('Periodo autorizado'); }
-  else if(gs.some(g=>g.estado==='devuelto')){ p.estado='devuelto'; gs.forEach(g=>{ if(g.estado==='enviado') g.estado='enviado'; }); toast('Devueltos al colaborador'); }
+  const gs = gastosDe(userId, periodo), r = perRec(userId, periodo), d = usuario(userId);
+  if(gs.some(g => g.estado === 'enviado')){ toast(accion === 'aprobar' ? 'Aprobados' : 'Marcados como devueltos'); save(); return render(); }
+  if(gs.some(g => g.estado === 'devuelto')){
+    r.estado = 'devuelto';
+    const n = gs.filter(g => g.estado === 'devuelto').length;
+    aviso = `Comprobación de ${esc(d.nombre)} devuelta (${n} gasto(s)). ` +
+      btnWa('avisar a ' + d.nombre, d.telefono, `Comprobación ${mesNombre(periodo)}: ${n} gasto(s) devuelto(s). Revise los comentarios y corrija en TU comprobación.`);
+  } else {
+    r.estado = 'autorizado'; r.autorizado = hoy();
+    const cont = contabilidad();
+    aviso = `Comprobación de ${esc(d.nombre)} autorizada y enviada a contabilidad. ` +
+      (cont ? btnWa('avisar a contabilidad', cont.telefono, `Comprobación ${mesNombre(periodo)} de ${d.nombre} autorizada por ${money(sum(gs))}. Lista para finiquitar.`) : '');
+  }
+  save(); render(); window.scrollTo(0,0);
+}
+function resolverAnticipo(id, ok){
+  const a = db.anticipos.find(x => x.id === id), d = usuario(a.userId), cont = contabilidad();
+  if(ok){
+    a.estado = 'autorizado'; a.autorizado = hoy(); a.autorizadoPor = db.sesion;
+    aviso = `Anticipo de ${esc(d.nombre)} autorizado. ` + (cont ? btnWa('avisar a contabilidad', cont.telefono, `Anticipo autorizado: ${d.nombre}, ${money(a.monto)} (${a.motivo}). Favor depositar.`) : '');
+  } else {
+    const m = prompt('Motivo del rechazo'); if(!m || !m.trim()) return toast('Escriba el motivo del rechazo');
+    a.estado = 'rechazado'; a.rechazo = m.trim();
+    aviso = `Anticipo rechazado. ` + btnWa('avisar a ' + d.nombre, d.telefono, `Su solicitud de anticipo por ${money(a.monto)} fue rechazada: ${a.rechazo}`);
+  }
   save(); render();
 }
 
+/* ---- contabilidad ---- */
 function vContab(u){
-  const lista = db.periodos.filter(p=>p.estado==='autorizado');
-  const anticipos = db.anticipos.filter(a=>a.estado==='solicitado');
+  const aut = db.periodos.filter(p => p.estado === 'autorizado');
+  const porDep = db.anticipos.filter(a => a.estado === 'autorizado');
+  const espera = db.anticipos.filter(a => a.estado === 'solicitado');
+  const ant = mesAnterior(), dia = Number(hoy().slice(8));
+  const sinRadicar = activos().filter(x => puedeComprobar(x) && estadoPer(x.id, ant) === 'abierto' && gastosDe(x.id, ant).length);
+  const meses = [...new Set(db.periodos.filter(p => ['autorizado','finiquitado'].includes(p.estado)).map(p => p.periodo))].sort().reverse();
+  const fin = db.periodos.filter(p => p.estado === 'finiquitado').sort((a,b) => (b.finiquitado||'').localeCompare(a.finiquitado||'')).slice(0, 10);
   return `
   <div class="card"><h2>Periodos por finiquitar</h2>
-    ${lista.map(p=>{ const d=usuario(p.userId); const t=gastosPeriodo(p.userId,p.periodo).reduce((s,g)=>s+g.valor,0);
-      return `<p>${d.nombre} · ${p.periodo} · ${money(t)} <button class="ghost" onclick="finiquitar('${p.userId}','${p.periodo}')">Finiquitar</button></p>`; }).join('') || '<p class="muted">Nada pendiente.</p>'}
+    <p class="muted">Exporte primero (abajo): al finiquitar se borran las fotos y solo quedan montos y datos.</p>
+    ${aut.length ? tabla(`<tr><th>Colaborador</th><th>Periodo</th><th>Pago</th><th class="num">Total</th><th>Liquidación</th><th></th></tr>
+      ${aut.map(p => { const d = usuario(p.userId), gs = gastosDe(p.userId, p.periodo), t = sum(gs);
+        let liq = '';
+        if(d.pago === 'anticipo'){ const dep = sum(db.anticipos.filter(a => a.userId === d.id && a.estado === 'depositado'), a => a.monto), dif = dep - t;
+          liq = `Anticipo ${money(dep)} · ${dif > 0 ? `devuelve ${money(dif)}` : dif < 0 ? `depositar faltante ${money(-dif)}` : 'saldo cero'}`; }
+        else if(d.pago === 'caja') liq = `Reponer ${money(t)}`;
+        else liq = `Pago tarjeta ${money(sum(gs.filter(g => g.medio === 'tarjeta')))}${gs.some(g => g.medio === 'efectivo') ? ` · reembolsar efectivo ${money(sum(gs.filter(g => g.medio === 'efectivo')))}` : ''}`;
+        return `<tr><td>${esc(d.nombre)}</td><td>${mesNombre(p.periodo)}</td><td>${PAGOS[d.pago] || '—'}</td><td class="num">${money(t)}</td><td>${liq}${p.exportado ? '' : ' <span class="tag warn">sin exportar</span>'}</td>
+          <td><button class="ghost sm" onclick="finiquitar('${p.userId}','${p.periodo}')">Finiquitar</button></td></tr>`; }).join('')}`) : '<p class="muted">Nada pendiente.</p>'}
   </div>
-  <div class="card"><h2>Anticipos solicitados</h2>
-    ${anticipos.map(a=>`<p>${usuario(a.userId).nombre} · ${money(a.monto)} · ${a.motivo} <button class="ghost" onclick="depositar('${a.id}')">Confirmar depósito</button></p>`).join('') || '<p class="muted">Nada pendiente.</p>'}
+  <div class="card"><h2>Exportar periodo</h2>
+    ${meses.length ? `<div class="row"><div><label>Mes</label><select id="xm">${meses.map(m => `<option value="${m}">${mesNombre(m)}</option>`).join('')}</select></div><div></div></div>
+      <p class="muted">Incluye los gastos autorizados y finiquitados del mes. El ZIP trae el CSV (abre en Excel) y las fotos.</p>
+      <div class="acciones"><button class="primary" onclick="exportarZIP($('#xm').value)">Descargar ZIP con fotos</button><button class="ghost" onclick="exportarCSV($('#xm').value)">Solo Excel (CSV)</button></div>`
+      : '<p class="muted">Aún no hay periodos autorizados.</p>'}
+  </div>
+  <div class="card"><h2>Anticipos por depositar</h2>
+    ${porDep.length ? tabla(`<tr><th>Colaborador</th><th class="num">Monto</th><th>Motivo</th><th>Autorizó</th><th></th></tr>
+      ${porDep.map(a => `<tr><td>${esc(usuario(a.userId).nombre)}</td><td class="num">${money(a.monto)}</td><td>${esc(a.motivo)}</td><td>${esc(usuario(a.autorizadoPor)?.nombre || '')} · ${a.autorizado}</td>
+        <td><button class="ghost sm" onclick="depositar('${a.id}')">Confirmar depósito</button></td></tr>`).join('')}`) : '<p class="muted">Nada pendiente.</p>'}
+    ${espera.length ? `<p class="muted">Esperando autorización del jefe: ${espera.map(a => `${esc(usuario(a.userId).nombre)} (${money(a.monto)})`).join(', ')}</p>` : ''}
+  </div>
+  <div class="card"><h2>Pendientes de radicar · ${mesNombre(ant)}</h2>
+    ${sinRadicar.length ? `<p>${dia > DIA_LIMITE ? '<span class="tag bad">vencido</span> ' : ''}${sinRadicar.map(x => esc(x.nombre)).join(', ')}</p>
+      ${sinRadicar.map(x => btnWa('recordar a ' + x.nombre, x.telefono, `Recordatorio: envíe su comprobación de ${mesNombre(ant)} en TU comprobación (plazo: día ${DIA_LIMITE}).`)).join('')}`
+      : '<p class="muted">Todos al día.</p>'}
+  </div>
+  <div class="card"><h2>Finiquitados recientes</h2>
+    ${fin.length ? tabla(fin.map(p => `<tr><td>${esc(usuario(p.userId).nombre)}</td><td>${mesNombre(p.periodo)}</td><td class="num">${money(p.total)}</td><td>${p.finiquitado}</td><td>${resumenSaldo(usuario(p.userId), p).replace(/<\/?(div|p)[^>]*>/g, '')}</td></tr>`).join('')) : '<p class="muted">Ninguno.</p>'}
   </div>`;
 }
 function finiquitar(userId, periodo){
-  const p = db.periodos.find(x=>x.userId===userId && x.periodo===periodo);
-  p.estado='finiquitado';
-  gastosPeriodo(userId,periodo).forEach(g=>g.estado='pagado');
+  const r = perRec(userId, periodo), d = usuario(userId), gs = gastosDe(userId, periodo), t = sum(gs);
+  if(!r.exportado && !confirm('Este periodo no se ha exportado. Al finiquitar se borran las fotos. ¿Continuar?')) return;
+  if(d.pago === 'anticipo'){
+    const ants = db.anticipos.filter(a => a.userId === userId && a.estado === 'depositado');
+    r.anticipo = sum(ants, a => a.monto); r.diferencia = r.anticipo - t;
+    ants.forEach(a => { a.estado = 'comprobado'; a.periodo = periodo; });
+  }
+  gs.forEach(g => { g.estado = 'pagado'; if(g.foto){ g.foto = null; g.fotoArchivada = true; } });
+  r.estado = 'finiquitado'; r.finiquitado = hoy(); r.total = t;
   save(); toast('Periodo finiquitado'); render();
 }
-function depositar(id){ const a=db.anticipos.find(x=>x.id===id); a.estado='depositado'; save(); render(); }
+function depositar(id){
+  const a = db.anticipos.find(x => x.id === id), d = usuario(a.userId);
+  a.estado = 'depositado'; a.depositado = hoy(); save();
+  aviso = `Depósito confirmado. ` + btnWa('avisar a ' + d.nombre, d.telefono, `Su anticipo por ${money(a.monto)} fue depositado.`);
+  render();
+}
+function filasExport(p){ return db.gastos.filter(g => g.periodo === p && ['aprobado','pagado'].includes(g.estado)); }
+const nombreFoto = g => `fotos/${g.periodo}_${usuario(g.userId).login}_${g.fecha}_${g.id}.jpg`;
+function csvMes(p){
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['Periodo','Colaborador','Usuario','Puesto','Tipo de pago','Centro de costos','Fecha','Concepto','Valor','Medio de pago','Empresa/Cliente','Personas','N personas','Fuera de ciudad','Factura enviada','Comentario','Estado','Foto'];
+  const rows = filasExport(p).map(g => { const u = usuario(g.userId);
+    return [g.periodo, u.nombre, u.login, u.puesto, PAGOS[u.pago] || '', g.centro, g.fecha, nombreConcepto(g.concepto), g.valor, MEDIOS[g.medio] || g.medio,
+      g.empresa, g.personas, g.cliente ? g.nPersonas : '', g.fuera ? 'Sí' : '', g.factura ? 'Sí' : 'No', g.comentario, g.estado === 'pagado' ? 'finiquitado' : 'autorizado', g.foto ? nombreFoto(g) : ''];
+  });
+  return '﻿' + [head, ...rows].map(r => r.map(q).join(';')).join('\r\n');
+}
+function descargar(blob, nombre){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+function marcarExportado(p){ db.periodos.filter(r => r.periodo === p && r.estado === 'autorizado').forEach(r => r.exportado = hoy()); save(); }
+function exportarCSV(p){ descargar(new Blob([csvMes(p)], {type:'text/csv;charset=utf-8'}), `comprobaciones_${p}.csv`); }
+async function exportarZIP(p){
+  if(!window.JSZip) return toast('No se pudo cargar el compresor ZIP (sin internet). Descargue el CSV.');
+  const zip = new JSZip(); zip.file(`comprobaciones_${p}.csv`, csvMes(p));
+  filasExport(p).filter(g => g.foto).forEach(g => zip.file(nombreFoto(g), g.foto.split(',')[1], {base64:true}));
+  descargar(await zip.generateAsync({type:'blob'}), `comprobaciones_${p}.zip`);
+  marcarExportado(p); toast('Exportado'); render();
+}
 
-/* ---- Matriz de usuarios (contabilidad) ---- */
-let editUser = null; // id en edición, 'nuevo' o null
+/* ---- matriz de usuarios (contabilidad) ---- */
 function vUsuarios(u){
-  const x = editUser==='nuevo' ? {id:'', nombre:'', puesto:'', rol:'vendedor', autoriza:'', pago:'tarjeta', centro:'Comercial', credito:0}
+  const x = editUser === 'nuevo' ? nuevoUsuario({id:'', login:'', nombre:'', puesto:'', rol:'vendedor', pago:'tarjeta', centro:'Comercial'})
           : editUser ? usuario(editUser) : null;
-  const opcionesAut = x ? db.usuarios.filter(a=>puedeAutorizar(a) && a.id!==x.id && a.activo!==false) : [];
+  const opcionesAut = x ? activos().filter(a => puedeAutorizar(a) && a.id !== x.id) : [];
   const form = !x ? '' : `
   <div class="card">
-    <h2>${editUser==='nuevo'?'Nuevo usuario':'Editar: '+x.nombre}</h2>
+    <h2>${editUser === 'nuevo' ? 'Nuevo usuario' : 'Editar: ' + esc(x.nombre)}</h2>
+    ${x.bloqueado ? `<div class="alert bad">Usuario bloqueado por intentos fallidos. <button class="ghost sm" onclick="desbloquear('${x.id}')">Desbloquear</button></div>` : ''}
     <div class="row">
-      <div><label>Nombre</label><input id="un" value="${x.nombre}"></div>
-      <div><label>Puesto</label><input id="up" value="${x.puesto}"></div>
+      <div><label>Nombre</label><input id="un" value="${esc(x.nombre)}" oninput="sugerirLogin()"></div>
+      <div><label>Usuario para ingresar</label><input id="ul" value="${esc(x.login)}" autocapitalize="none"></div>
     </div>
     <div class="row">
-      <div><label>Rol</label><select id="ur">${Object.entries(ROLES).map(([k,l])=>`<option value="${k}" ${x.rol===k?'selected':''}>${l}</option>`).join('')}</select></div>
-      <div><label>Lo autoriza</label><select id="ua"><option value="">— Nadie —</option>${opcionesAut.map(a=>`<option value="${a.id}" ${x.autoriza===a.id?'selected':''}>${a.nombre} (${a.puesto})</option>`).join('')}</select>
+      <div><label>Puesto</label><input id="up" value="${esc(x.puesto)}"></div>
+      <div><label>Celular (WhatsApp)</label><input id="ut" value="${esc(x.telefono)}" inputmode="tel" placeholder="3001234567"></div>
+    </div>
+    <div class="row">
+      <div><label>Rol</label><select id="ur" onchange="ajustarUsuarioForm()">${Object.entries(ROLES).map(([k,l]) => `<option value="${k}" ${x.rol===k?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div><label>Lo autoriza</label><select id="ua"><option value="">— Nadie —</option>${opcionesAut.map(a => `<option value="${a.id}" ${x.autoriza===a.id?'selected':''}>${esc(a.nombre)} (${esc(a.puesto)})</option>`).join('')}</select>
         <p class="muted">Solo aparecen usuarios con rol Líder, Autorizador o Administrador.</p></div>
     </div>
     <div class="row">
-      <div><label>Tipo de pago</label><select id="upg">
+      <div class="f-pago"><label>Tipo de pago</label><select id="upg" onchange="ajustarUsuarioForm()">
         <option value="tarjeta" ${x.pago==='tarjeta'?'selected':''}>Tarjeta de crédito</option>
         <option value="anticipo" ${x.pago==='anticipo'?'selected':''}>Anticipo</option>
         <option value="" ${!x.pago?'selected':''}>No aplica</option></select></div>
-      <div><label>Centro de costos</label><select id="uc"><option value="">—</option>${CENTROS.map(c=>`<option ${x.centro===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div><label>Centro de costos / planta</label><select id="uc"><option value="">—</option>${db.centros.map(c => `<option ${x.centro===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
     </div>
     <div class="row">
-      <div><label>Cupo de tarjeta (COP)</label><input id="ucr" type="number" min="0" value="${x.credito||''}"></div>
-      <div></div>
+      <div class="f-cupo"><label>Cupo de tarjeta (COP)</label><input id="ucr" type="number" min="0" value="${x.credito || ''}"></div>
+      <div class="f-caja"><label>Monto fijo de caja (COP)</label><input id="umc" type="number" min="0" value="${x.montoCaja || ''}" placeholder="2000000"></div>
+      <div class="f-caja"><label>Encargado de la caja</label><input id="uen" value="${esc(x.encargado)}"></div>
     </div>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+    <div class="acciones">
       <button class="primary" onclick="guardarUsuario()">Guardar</button>
       <button class="ghost" onclick="editUser=null;render()">Cancelar</button>
-      ${editUser!=='nuevo'?`<button class="ghost" onclick="restablecer('${x.id}')">Restablecer contraseña</button>
-        <button class="danger" onclick="activar('${x.id}',${x.activo===false})">${x.activo===false?'Reactivar':'Desactivar'}</button>`:''}
+      ${editUser !== 'nuevo' ? `<button class="ghost" onclick="restablecer('${x.id}')">Restablecer contraseña</button>
+        <button class="danger" onclick="activar('${x.id}',${x.activo === false})">${x.activo === false ? 'Reactivar' : 'Desactivar'}</button>` : ''}
     </div>
   </div>`;
-  const sinAut = db.usuarios.filter(y=>puedeComprobar(y) && y.activo!==false && (!y.autoriza || usuario(y.autoriza)?.activo===false));
+  const sinAut = activos().filter(y => puedeComprobar(y) && (!y.autoriza || usuario(y.autoriza)?.activo === false));
+  setTimeout(() => x && ajustarUsuarioForm(), 0);
   return form + `<div class="card"><h2>Matriz de usuarios</h2>
-    ${sinAut.length?`<div class="alert">Sin autorizador asignado: ${sinAut.map(y=>y.nombre).join(', ')}. No podrán enviar su comprobación.</div>`:''}
-    <div style="margin:10px 0"><button class="primary" onclick="editUser='nuevo';render()">+ Nuevo usuario</button></div>
-    <div style="overflow-x:auto"><table><tr><th>Nombre</th><th>Puesto</th><th>Rol</th><th>Lo autoriza</th><th>Autoriza a</th><th>Pago</th><th>Centro</th><th>Saldo tarjeta</th><th></th></tr>
-    ${db.usuarios.map(y=>`<tr style="${y.activo===false?'opacity:.5':''}"><td>${y.nombre}${y.activo===false?' <span class="tag bad">inactivo</span>':''}</td><td>${y.puesto}</td><td>${ROLES[y.rol]}</td>
-      <td>${usuario(y.autoriza)?.nombre||'—'}</td><td>${autorizaA(y).map(z=>z.nombre).join(', ')||'—'}</td>
-      <td>${y.pago||'—'}</td><td>${y.centro||'—'}</td><td>${y.pago==='tarjeta'?money(saldoTarjeta(y))+' de '+money(y.credito):'—'}</td>
-      <td><button class="ghost" onclick="editUser='${y.id}';render()">Editar</button></td></tr>`).join('')}
-    </table></div>
-    <p class="muted">Caja menor: Planta Amagá y Planta Malambo (encargado y monto fijo de 2.000.000 COP, por confirmar).</p>
+    ${sinAut.length ? `<div class="alert">Sin autorizador asignado: ${sinAut.map(y => esc(y.nombre)).join(', ')}. No podrán enviar su comprobación.</div>` : ''}
+    <div class="acciones" style="margin:0 0 10px"><button class="primary" onclick="editUser='nuevo';render()">+ Nuevo usuario</button></div>
+    ${tabla(`<tr><th>Nombre</th><th>Usuario</th><th>Puesto</th><th>Rol</th><th>Lo autoriza</th><th>Autoriza a</th><th>Pago</th><th>Centro</th><th class="num">Saldo</th><th></th></tr>
+    ${db.usuarios.map(y => `<tr style="${y.activo === false ? 'opacity:.5' : ''}"><td>${esc(y.nombre)}${y.activo === false ? ' <span class="tag bad">inactivo</span>' : ''}${y.bloqueado ? ' <span class="tag bad">bloqueado</span>' : ''}</td>
+      <td>${esc(y.login)}</td><td>${esc(y.puesto)}</td><td>${ROLES[y.rol]}</td>
+      <td>${esc(usuario(y.autoriza)?.nombre || '—')}</td><td>${autorizaA(y).map(z => esc(z.nombre)).join(', ') || '—'}</td>
+      <td>${PAGOS[y.pago] || '—'}</td><td>${esc(y.centro || '—')}</td>
+      <td class="num">${y.pago === 'tarjeta' ? money(saldoTarjeta(y)) + '<br><span class="muted">de ' + money(y.credito) + '</span>' : y.pago === 'caja' ? money(disponibleCaja(y)) + '<br><span class="muted">de ' + money(y.montoCaja) + '</span>' : '—'}</td>
+      <td><button class="ghost sm" onclick="editUser='${y.id}';render();window.scrollTo(0,0)">Editar</button></td></tr>`).join('')}`)}
+    <p class="muted">Cajas menores: se dan de alta con rol "Caja menor", su planta, encargado y monto fijo (2.000.000 COP por confirmar).</p>
   </div>`;
 }
-function claveTemporal(){ return 'Tu' + Math.random().toString(36).slice(2,8) + Math.floor(Math.random()*90+10); }
+function ajustarUsuarioForm(){
+  const rol = $('#ur')?.value; if(!rol) return;
+  const caja = rol === 'caja', comprueba = ['vendedor','lider','caja'].includes(rol);
+  document.querySelectorAll('.f-caja').forEach(e => e.classList.toggle('hidden', !caja));
+  document.querySelector('.f-pago').classList.toggle('hidden', caja || !comprueba);
+  document.querySelector('.f-cupo').classList.toggle('hidden', caja || !comprueba || $('#upg').value !== 'tarjeta');
+}
+function sugerirLogin(){
+  if(editUser !== 'nuevo' || $('#ul').dataset.tocado) return;
+  const p = $('#un').value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  $('#ul').value = p.length > 1 ? p[0] + '.' + p[p.length - 1] : (p[0] || '');
+}
+document.addEventListener('input', e => { if(e.target.id === 'ul') e.target.dataset.tocado = '1'; });
+function claveTemporal(){ return 'Tu' + Math.random().toString(36).slice(2, 8) + Math.floor(Math.random() * 90 + 10); }
 function guardarUsuario(){
-  const d = { nombre:$('#un').value.trim(), puesto:$('#up').value.trim(), rol:$('#ur').value, autoriza:$('#ua').value||null,
-    pago:$('#upg').value||null, centro:$('#uc').value||null, credito:Number($('#ucr').value||0) };
+  const rol = $('#ur').value, caja = rol === 'caja', comprueba = ['vendedor','lider','caja'].includes(rol);
+  const d = { nombre:$('#un').value.trim(), login:$('#ul').value.trim().toLowerCase(), puesto:$('#up').value.trim(), telefono:$('#ut').value.trim(),
+    rol, autoriza:$('#ua').value || null, pago: caja ? 'caja' : comprueba ? ($('#upg').value || null) : null, centro:$('#uc').value || null,
+    credito:Number($('#ucr').value || 0), montoCaja:Number($('#umc').value || 0), encargado:$('#uen').value.trim() };
   if(!d.nombre || !d.puesto) return toast('Nombre y puesto son obligatorios');
-  if(['vendedor','lider'].includes(d.rol) && !d.autoriza) return toast('Asigne quién lo autoriza');
-  if(['vendedor','lider'].includes(d.rol) && !d.pago) return toast('Defina el tipo de pago');
-  if(['vendedor','lider'].includes(d.rol) && !d.centro) return toast('Defina el centro de costos');
-  if(d.pago==='tarjeta' && !d.credito) return toast('Ingrese el cupo de la tarjeta');
-  if(d.pago!=='tarjeta') d.credito = 0;
-  if(editUser==='nuevo'){
+  if(!/^[a-z0-9._-]{3,}$/.test(d.login)) return toast('Usuario: mínimo 3 caracteres, sin espacios ni tildes');
+  if(db.usuarios.some(y => y.login === d.login && y.id !== editUser)) return toast('Ese usuario ya existe');
+  if(comprueba && !d.autoriza) return toast('Asigne quién lo autoriza');
+  if(comprueba && !d.pago) return toast('Defina el tipo de pago');
+  if(comprueba && !d.centro) return toast('Defina el centro de costos');
+  if(d.pago === 'tarjeta' && !d.credito) return toast('Ingrese el cupo de la tarjeta');
+  if(caja && !d.montoCaja) return toast('Ingrese el monto fijo de la caja');
+  if(d.pago !== 'tarjeta') d.credito = 0;
+  if(!caja){ d.montoCaja = 0; d.encargado = ''; }
+  if(editUser === 'nuevo'){
     const clave = claveTemporal();
-    db.usuarios.push({id:'u'+Date.now(), ...d, password:clave, cambiarClave:true});
-    alert(`Usuario creado.\nContraseña temporal: ${clave}\nEntréguela a ${d.nombre}.`);
+    db.usuarios.push(nuevoUsuario({id:'u' + Date.now(), ...d, password:clave, cambiarClave:true}));
+    alert(`Usuario creado.\nUsuario: ${d.login}\nContraseña temporal: ${clave}\nEntréguela a ${d.nombre}; deberá cambiarla al primer ingreso.`);
   } else {
-    if(d.autoriza===editUser) return toast('Nadie puede autorizarse a sí mismo');
+    if(d.autoriza === editUser) return toast('Nadie puede autorizarse a sí mismo');
     Object.assign(usuario(editUser), d);
-    // Si deja de poder autorizar, sus autorizados quedan sin autorizador
-    if(!puedeAutorizar(d)) db.usuarios.forEach(y=>{ if(y.autoriza===editUser) y.autoriza=null; });
+    if(!puedeAutorizar(d)) db.usuarios.forEach(y => { if(y.autoriza === editUser) y.autoriza = null; });
     toast('Usuario actualizado');
   }
-  editUser=null; save(); render();
+  editUser = null; save(); render();
 }
 function restablecer(id){
-  const y = usuario(id); const clave = claveTemporal();
-  y.password = clave; y.cambiarClave = true; save();
-  alert(`Nueva contraseña temporal de ${y.nombre}: ${clave}`);
+  const y = usuario(id), clave = claveTemporal();
+  Object.assign(y, {password:clave, cambiarClave:true, bloqueado:false, intentos:0}); save();
+  alert(`Nueva contraseña temporal de ${y.nombre} (usuario ${y.login}): ${clave}`); render();
 }
-function activar(id, on){ usuario(id).activo = on; save(); editUser=null; render(); }
-function vDashboard(u){
-  const todos = db.gastos.filter(g=>g.periodo===mesActual());
-  const porConcepto = {}; todos.forEach(g=>porConcepto[g.concepto]=(porConcepto[g.concepto]||0)+g.valor);
-  const porCentro = {}; todos.forEach(g=>porCentro[g.centro]=(porCentro[g.centro]||0)+g.valor);
-  const filas = o => Object.entries(o).map(([k,v])=>`<tr><td>${nombreConcepto(k)===k?k:nombreConcepto(k)}</td><td>${money(v)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">Sin datos</td></tr>';
-  return `<div class="card"><h2>Gasto del mes por concepto</h2><table>${filas(porConcepto)}</table></div>
-  <div class="card"><h2>Gasto del mes por centro de costos</h2><table>${filas(porCentro)}</table></div>`;
-}
+function desbloquear(id){ Object.assign(usuario(id), {bloqueado:false, intentos:0}); save(); toast('Usuario desbloqueado'); render(); }
+function activar(id, on){ usuario(id).activo = on; save(); editUser = null; render(); }
 
+/* ---- administración ---- */
+function vDashboard(u){
+  if(!dper) dper = mesActual();
+  const meses = [...new Set([mesActual(), mesAnterior(), ...db.gastos.map(g => g.periodo)])].sort().reverse();
+  const gs = db.gastos.filter(g => g.periodo === dper);
+  const agrupar = f => { const o = {}; gs.forEach(g => { const k = f(g); o[k] = (o[k] || 0) + g.valor; }); return Object.entries(o).sort((a,b) => b[1] - a[1]); };
+  const barras = filas => { const max = Math.max(1, ...filas.map(f => f[1]));
+    return filas.length ? tabla(filas.map(([k,v]) => `<tr><td style="width:40%">${esc(k)}</td><td><div class="bar" style="width:${(v/max*100).toFixed(1)}%"></div></td><td class="num">${money(v)}</td></tr>`).join(''))
+      : '<p class="muted">Sin datos</p>'; };
+  const tarjetas = activos().filter(x => x.pago === 'tarjeta');
+  const cajas = activos().filter(x => x.pago === 'caja');
+  const ants = db.anticipos.filter(a => !['comprobado','rechazado'].includes(a.estado));
+  const pers = activos().filter(puedeComprobar);
+  return `
+  <div class="card"><label>Mes</label><select onchange="dper=this.value;render()">${meses.map(m => `<option value="${m}" ${m===dper?'selected':''}>${mesNombre(m)}</option>`).join('')}</select>
+    <p class="total" style="margin:12px 0 0">${money(sum(gs))}</p><p class="muted">${gs.length} gasto(s) registrados en ${mesNombre(dper)} (todos los estados)</p></div>
+  <div class="card"><h2>Por concepto</h2>${barras(agrupar(g => nombreConcepto(g.concepto)))}</div>
+  <div class="card"><h2>Por planta / centro de costos</h2>${barras(agrupar(g => g.centro))}</div>
+  <div class="card"><h2>Por persona</h2>${tabla(`<tr><th>Persona</th><th>Estado del periodo</th><th class="num">Total</th></tr>
+    ${pers.map(x => `<tr><td>${esc(x.nombre)}</td><td>${tagEstado(estadoPer(x.id, dper))}</td><td class="num">${money(sum(gs.filter(g => g.userId === x.id)))}</td></tr>`).join('')}`)}</div>
+  <div class="card"><h2>Saldos de tarjeta</h2>${tarjetas.length ? tabla(`<tr><th>Persona</th><th class="num">Cupo</th><th class="num">Saldo</th></tr>
+    ${tarjetas.map(x => `<tr><td>${esc(x.nombre)}</td><td class="num">${money(x.credito)}</td><td class="num">${money(saldoTarjeta(x))}</td></tr>`).join('')}`) : '<p class="muted">Ninguna</p>'}</div>
+  <div class="card"><h2>Anticipos pendientes</h2>${ants.length ? tabla(`<tr><th>Persona</th><th class="num">Monto</th><th>Estado</th><th>Desde</th></tr>
+    ${ants.map(a => `<tr><td>${esc(usuario(a.userId).nombre)}</td><td class="num">${money(a.monto)}</td><td>${tagEstado(a.estado)}</td><td>${a.fecha}</td></tr>`).join('')}`) : '<p class="muted">Ninguno</p>'}</div>
+  <div class="card"><h2>Cajas menores</h2>${cajas.length ? tabla(`<tr><th>Caja</th><th>Encargado</th><th class="num">Monto fijo</th><th class="num">Disponible</th></tr>
+    ${cajas.map(x => `<tr><td>${esc(x.nombre)}</td><td>${esc(x.encargado || '—')}</td><td class="num">${money(x.montoCaja)}</td><td class="num">${money(disponibleCaja(x))}</td></tr>`).join('')}`) : '<p class="muted">Ninguna</p>'}</div>`;
+}
+function vPoliticas(u){
+  return `<div class="card"><h2>Topes por concepto</h2>
+    <p class="muted">Vacío = sin tope. En comidas y cafés con cliente el tope es por persona. Si un gasto lo supera, la app pide el motivo.</p>
+    ${tabla(`<tr><th>Concepto</th><th>Tope (COP)</th></tr>${CONCEPTOS.map(c => `<tr><td>${c.nombre}${c.porPersona ? ' <span class="muted">(por persona)</span>' : ''}</td>
+      <td><input id="t-${c.id}" type="number" min="0" value="${db.topes[c.id] || ''}" style="max-width:180px"></td></tr>`).join('')}`)}
+    <div class="acciones"><button class="primary" onclick="guardarTopes()">Guardar topes</button></div>
+    <p class="muted">Pendiente: topes distintos por rol cuando llegue la política de inventario.</p></div>
+  <div class="card"><h2>Centros de costos</h2>
+    <p>${db.centros.map(c => `<span class="tag">${esc(c)}</span>`).join(' ')}</p>
+    <div class="row"><div><input id="ncc" placeholder="Nuevo centro de costos"></div><div><button class="ghost" onclick="agregarCentro()">Agregar</button></div></div></div>`;
+}
+function guardarTopes(){ CONCEPTOS.forEach(c => { const v = Number($('#t-' + c.id).value || 0); if(v > 0) db.topes[c.id] = v; else delete db.topes[c.id]; }); save(); toast('Topes guardados'); }
+function agregarCentro(){ const v = $('#ncc').value.trim(); if(!v) return; if(db.centros.includes(v)) return toast('Ya existe'); db.centros.push(v); save(); render(); }
+
+revisarInactividad();
 render();
 </script>
 </body>

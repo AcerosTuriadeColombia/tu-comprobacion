@@ -1,6 +1,6 @@
 # TU comprobación — Reglas, condiciones y flujo de trabajo
 
-Versión 0.2 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
+Versión 0.3 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
 
 ## 1. Roles
 
@@ -18,7 +18,8 @@ Los autorizadores no se fijan por nombre en la app: contabilidad los asigna en l
 
 Contabilidad da de alta a todos los usuarios. Cada usuario tiene: nombre, puesto, rol, correo (opcional, solo referencia), quién lo autoriza, tipo de pago (tarjeta de crédito o anticipo), centro de costos (Planta Amagá, Planta Malambo, Comercial), saldo de crédito (si es tarjeta) y política según rol.
 
-- Cajas menores se dan de alta como usuario tipo "Caja menor": planta, encargado, monto fijo (2.000.000 COP, por confirmar).
+- Cajas menores se dan de alta como usuario con rol "Caja menor": planta, encargado, monto fijo (2.000.000 COP, por confirmar) y autorizador.
+- Cada usuario tiene un nombre de usuario para ingresar y un celular para los avisos por WhatsApp.
 - Al crear un usuario, la app genera una contraseña temporal que contabilidad entrega a la persona.
 - Recuperación de contraseña: solo contabilidad la restablece y entrega una temporal.
 - Los usuarios que salen de la empresa se desactivan (no se borran) para conservar su historial.
@@ -48,7 +49,7 @@ Conceptos: Desayuno, Almuerzo, Comida con cliente, Café con cliente, Peaje, Com
 ## 5. Comprobantes
 
 - Se adjunta la imagen del ticket y se captura el valor total.
-- La app lee fecha y valor de la imagen como sugerencia; la persona confirma antes de guardar.
+- La app lee fecha y valor de la imagen como sugerencia; la persona confirma antes de guardar. (Pendiente para producción; en el prototipo se capturan a mano.)
 - Casilla "factura enviada al correo de la empresa".
 - Pagos en efectivo permitidos cuando el lugar no acepta tarjeta (peajes, parqueaderos y similares). Se marca el medio de pago por gasto.
 - Las cajas menores llevan foto por cada gasto.
@@ -61,7 +62,11 @@ Conceptos: Desayuno, Almuerzo, Comida con cliente, Café con cliente, Peaje, Com
 4. **Autorizado.** Todos los gastos aprobados. Pasa a contabilidad.
 5. **Finiquitado.** Contabilidad cierra el periodo y registra el pago de la tarjeta, o confirma el depósito/devolución del anticipo.
 
-Plazo de radicación: los primeros días del mes. La app avisa cuando se acerca la fecha y muestra periodos pendientes.
+Cada gasto pertenece al mes de la fecha de su ticket. La persona elige el periodo (mes) en la app; al inicio de mes la app abre por defecto el mes anterior si tiene gastos sin enviar.
+
+Al reenviar un periodo devuelto, solo se revisan los gastos corregidos; los ya aprobados no se tocan.
+
+Plazo de radicación: los primeros 5 días del mes. La app avisa cuando se acerca la fecha y muestra periodos pendientes.
 
 ## 7. Tipos de pago
 
@@ -80,7 +85,10 @@ Plazo de radicación: los primeros días del mes. La app avisa cuando se acerca 
 
 - Solicitud de anticipo: botón WhatsApp a contabilidad.
 - Periodo enviado: botón WhatsApp al autorizador.
-- Periodo devuelto: aviso manual por WhatsApp (botón).
+- Periodo devuelto: botón WhatsApp del autorizador al colaborador.
+- Periodo autorizado y anticipo autorizado: botón WhatsApp a contabilidad.
+- Anticipo depositado: botón WhatsApp de contabilidad al colaborador.
+- Recordatorio de radicación: contabilidad ve quién no ha enviado el mes anterior y tiene botón para recordarle.
 
 ## 9. Exportación y datos
 
@@ -93,6 +101,6 @@ Plazo de radicación: los primeros días del mes. La app avisa cuando se acerca 
 - Definir en la matriz quién autoriza a cada comercial y a cada líder.
 - Encargados de caja menor por planta (Amagá y Malambo).
 - Monto definitivo de cada caja menor (hoy 2.000.000 COP).
-- Política de montos por concepto y rol (inventario).
+- Política de montos por concepto y rol (inventario). El administrador ya puede cargar topes por concepto en Políticas.
 - Formato exacto que pide contabilidad para el ERP.
 - Repositorio nuevo en GitHub + proyecto Supabase.
