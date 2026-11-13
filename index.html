@@ -93,7 +93,9 @@ const CONCEPTOS = [
 ];
 const ROLES = {vendedor:'Vendedor', lider:'Líder', autorizador:'Autorizador', caja:'Caja menor', contabilidad:'Contabilidad', admin:'Administrador'};
 const PAGOS = {tarjeta:'Tarjeta de crédito', anticipo:'Anticipo', caja:'Caja menor'};
-const MEDIOS = {tarjeta:'Tarjeta', efectivo:'Efectivo', anticipo:'Anticipo', caja:'Caja menor'};
+const MEDIOS = {tarjeta:'Tarjeta empresa', anticipo:'Anticipo', caja:'Caja menor', propio:'Dinero propio'};
+const MOTIVOS = {no_acepta_tarjeta:'No aceptan tarjeta', cupo_agotado:'Cupo de tarjeta agotado', anticipo_agotado:'Anticipo agotado', otro:'Otro'};
+const motivoTxt = g => g.medio === 'propio' ? (MOTIVOS[g.motivoReembolso] || '') + (g.reembolsoDetalle ? ': ' + g.reembolsoDetalle : '') : '';
 const ESTADO_PER = {abierto:'abierto', enviado:'en revisión', devuelto:'devuelto', autorizado:'autorizado', finiquitado:'finiquitado'};
 const ESTADO_ANT = {solicitado:'solicitado', autorizado:'autorizado por jefe', rechazado:'rechazado', depositado:'depositado', comprobado:'comprobado'};
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -150,10 +152,10 @@ const mapU = r => ({id:r.id, login:r.login, nombre:r.nombre, puesto:r.puesto, ro
   cambiarClave:r.cambiar_clave, claveFecha:r.clave_fecha, sinAutorizador:!!r.sin_autorizador});
 const mapG = r => ({id:r.id, userId:r.user_id, periodo:r.periodo, fecha:r.fecha, concepto:r.concepto, valor:Number(r.valor), centro:r.centro, medio:r.medio,
   empresa:r.empresa, personas:r.personas, nPersonas:r.n_personas, cliente:r.cliente, fuera:r.fuera, factura:r.factura, comentario:r.comentario,
-  devolucion:r.devolucion, estado:r.estado, corregido:r.corregido, fotoPath:r.foto_path, fotoArchivada:r.foto_archivada});
+  devolucion:r.devolucion, estado:r.estado, corregido:r.corregido, fotoPath:r.foto_path, fotoArchivada:r.foto_archivada, motivoReembolso:r.motivo_reembolso || '', reembolsoDetalle:r.reembolso_detalle || ''});
 const num = v => v == null ? null : Number(v);
 const mapP = r => ({userId:r.user_id, periodo:r.periodo, estado:r.estado, enviado:r.enviado, envios:r.envios, autorizado:r.autorizado,
-  finiquitado:r.finiquitado, exportado:r.exportado, total:num(r.total), anticipo:num(r.anticipo), diferencia:num(r.diferencia)});
+  finiquitado:r.finiquitado, exportado:r.exportado, total:num(r.total), anticipo:num(r.anticipo), diferencia:num(r.diferencia), reembolso:num(r.reembolso)});
 const mapA = r => ({id:r.id, userId:r.user_id, monto:Number(r.monto), motivo:r.motivo, estado:r.estado, fecha:r.fecha, autorizado:r.autorizado,
   autorizadoPor:r.autorizado_por, rechazo:r.rechazo, depositado:r.depositado, periodo:r.periodo});
 
@@ -210,6 +212,9 @@ const estadoPer = (uid, p) => perRec(uid, p)?.estado || 'abierto';
 const gastosDe = (uid, p) => db.gastos.filter(g => g.userId === uid && g.periodo === p).sort((a,b) => a.fecha.localeCompare(b.fecha));
 const saldoTarjeta = u => u.credito - sum(db.gastos.filter(g => g.userId === u.id && g.medio === 'tarjeta' && g.estado !== 'pagado'));
 const disponibleCaja = u => u.montoCaja - sum(db.gastos.filter(g => g.userId === u.id && g.estado !== 'pagado'));
+const disponibleAnticipo = (u, excluirId) => sum(db.anticipos.filter(a => a.userId === u.id && a.estado === 'depositado'), a => a.monto)
+  - sum(db.gastos.filter(g => g.userId === u.id && g.medio === 'anticipo' && g.estado !== 'pagado' && g.id !== excluirId));
+const reembolsoPendiente = u => sum(db.gastos.filter(g => g.userId === u.id && g.medio === 'propio' && g.estado !== 'pagado'));
 const anticipoAbierto = u => db.anticipos.find(a => a.userId === u.id && !['comprobado','rechazado'].includes(a.estado));
 const debeCambiarClave = u => u.cambiarClave || (u.claveFecha && diasDesde(u.claveFecha) >= DIAS_CLAVE);
 const tagEstado = e => `<span class="tag ${({autorizado:'ok',finiquitado:'ok',aprobado:'ok',pagado:'ok',devuelto:'bad',rechazado:'bad',enviado:'warn',solicitado:'warn'})[e]||''}">${esc(ESTADO_PER[e]||ESTADO_ANT[e]||e)}</span>`;
@@ -378,7 +383,8 @@ function vInicio(u){
     if(u.pago === 'tarjeta') h += `<p>Saldo de tarjeta: <b>${money(saldoTarjeta(u))}</b> de ${money(u.credito)}</p>`;
     if(u.pago === 'caja') h += `<p>Disponible en caja: <b>${money(disponibleCaja(u))}</b> de ${money(u.montoCaja)}</p>
       <p class="muted">Encargado: ${esc(u.encargado || 'por definir')}. Lo gastado se repone al finiquitar la comprobación.</p>`;
-    if(u.pago === 'anticipo'){ const a = anticipoAbierto(u); h += a ? `<p>Anticipo vigente: <b>${money(a.monto)}</b> ${tagEstado(a.estado)}</p>` : `<p class="muted">Sin anticipo vigente.</p>`; }
+    if(u.pago === 'anticipo'){ const a = anticipoAbierto(u); h += a ? `<p>Anticipo vigente: <b>${money(a.monto)}</b> ${tagEstado(a.estado)}${a.estado === 'depositado' ? ` · disponible <b>${money(disponibleAnticipo(u))}</b>` : ''}</p>` : `<p class="muted">Sin anticipo vigente.</p>`; }
+    if(reembolsoPendiente(u)) h += `<p>Reembolsos a su favor (dinero propio): <b>${money(reembolsoPendiente(u))}</b></p>`;
     const ant = mesAnterior(), eAnt = estadoPer(u.id, ant), nAnt = gastosDe(u.id, ant).length;
     if(eAnt === 'abierto' && nAnt){
       h += `<div class="alert bad">La comprobación de <b>${mesNombre(ant)}</b> (${rangoPer(ant)}) está vencida: el corte fue el día ${CORTE}. Envíela cuanto antes.</div>
@@ -448,16 +454,39 @@ function vGastos(u){
       ${lista.map(x => `<tr class="${x.estado==='devuelto'?'devuelto':''}">
         <td>${x.fecha}</td>
         <td>${esc(nombreConcepto(x.concepto))}${x.empresa ? `<br><span class="muted">${esc(x.empresa)}</span>` : ''}${x.devolucion && x.estado==='devuelto' ? `<br><span class="muted" style="color:var(--bad)">${esc(x.devolucion)}</span>` : ''}</td>
-        <td>${esc(x.centro)}</td><td>${MEDIOS[x.medio] || esc(x.medio)}</td><td class="num">${money(x.valor)}</td><td>${thumb(x)}</td>
+        <td>${esc(x.centro)}</td><td>${MEDIOS[x.medio] || esc(x.medio)}${x.medio === 'propio' ? `<br><span class="tag warn" title="${esc(motivoTxt(x))}">reembolsable</span>` : ''}</td><td class="num">${money(x.valor)}</td><td>${thumb(x)}</td>
         <td>${x.estado === 'borrador' ? (x.corregido ? '<span class="tag">corregido</span>' : '<span class="tag">borrador</span>') : tagEstado(x.estado)}</td>
         <td>${editable(u, x) ? `<div style="display:flex;gap:6px"><button class="ghost sm" onclick="editarGasto('${x.id}')">${x.estado==='devuelto'?'Corregir':'Editar'}</button><button class="danger sm" onclick="borrarGasto('${x.id}')">Eliminar</button></div>` : ''}</td>
       </tr>`).join('') || '<tr><td colspan="8" class="muted">Sin gastos</td></tr>'}`)}
   </div>`;
 }
 function opcionesMedio(u){
-  if(u.pago === 'caja') return {caja:'Caja menor (efectivo)'};
-  if(u.pago === 'anticipo') return {anticipo:'Efectivo del anticipo', tarjeta:'Tarjeta de crédito'};
-  return {tarjeta:'Tarjeta de crédito', efectivo:'Efectivo (no aceptan tarjeta)'};
+  const propio = {propio:'Dinero propio – reembolsable'};
+  if(u.pago === 'caja') return {caja:'Caja menor', ...propio};
+  if(u.pago === 'anticipo') return {anticipo:'Anticipo', ...propio};
+  return {tarjeta:'Tarjeta de crédito de la empresa', ...propio};
+}
+function reembHtml(g = {}){
+  return `<div class="row"><div><label>¿Por qué pagó con dinero propio?</label><select id="gmot"><option value="">— Elegir —</option>
+    ${Object.entries(MOTIVOS).filter(([k]) => !((yo()?.pago !== 'tarjeta' && k === 'cupo_agotado') || (yo()?.pago !== 'anticipo' && k === 'anticipo_agotado'))).map(([k,l]) => `<option value="${k}" ${g.motivoReembolso===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div><label>Detalle (obligatorio si es "Otro")</label><input id="gdet" value="${esc(g.reembolsoDetalle)}"></div></div>
+    <p class="muted">Este gasto se le reembolsa al finiquitar el periodo.</p>`;
+}
+function ajustarMedio(){
+  $('#reemb').innerHTML = $('#gm').value === 'propio' ? reembHtml({motivoReembolso: $('#gmot')?.value, reembolsoDetalle: $('#gdet')?.value}) : '';
+  avisoMedio();
+}
+function avisoMedio(){
+  const u = yo(), v = Number($('#gv')?.value || 0), m = $('#gm')?.value, edit = editId ? db.gastos.find(x => x.id === editId) : null;
+  let h = '';
+  if(m === 'tarjeta'){
+    const disp = saldoTarjeta(u) + (edit?.medio === 'tarjeta' ? edit.valor : 0);
+    if(v > disp) h = `El saldo disponible de la tarjeta es ${money(disp)}. Si la tarjeta no pasó y pagó de su bolsillo, elija <b>Dinero propio – reembolsable</b> con el motivo "Cupo de tarjeta agotado".`;
+  } else if(m === 'anticipo'){
+    const disp = disponibleAnticipo(u, edit?.id);
+    if(v > disp) h = `Su anticipo disponible es ${money(Math.max(disp, 0))}. Si ya se le acabó y pagó de su bolsillo, elija <b>Dinero propio – reembolsable</b> con el motivo "Anticipo agotado".`;
+  }
+  $('#avisoMedio').innerHTML = h ? `<div class="alert">${h}</div>` : '';
 }
 function formGasto(u, g){
   g = g || {};
@@ -475,10 +504,12 @@ function formGasto(u, g){
     <div><label>Centro de costos</label><select id="gcc">${db.centros.map(x => `<option ${x===(g.centro||u.centro)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
   </div>
   <div class="row">
-    <div><label>Medio de pago</label><select id="gm">${Object.entries(opcionesMedio(u)).map(([k,l]) => `<option value="${k}" ${g.medio===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div><label>Medio de pago</label><select id="gm" onchange="ajustarMedio()">${Object.entries(opcionesMedio(u)).map(([k,l]) => `<option value="${k}" ${g.medio===k?'selected':''}>${l}</option>`).join('')}</select></div>
     <div><label>Foto del ticket</label><input id="gfoto" type="file" accept="image/*" capture="environment">
       <p class="muted">${g.fotoPath ? 'Ya tiene foto guardada; suba otra solo si quiere reemplazarla.' : 'Obligatoria. Toque para tomar la foto.'}</p></div>
   </div>
+  <div id="reemb">${g.medio === 'propio' ? reembHtml(g) : ''}</div>
+  <div id="avisoMedio"></div>
   <div id="extras">${extrasHtml(c, g)}</div>
   <div id="avisoTope">${avisoTopeHtml(c, g.valor, g.nPersonas, g.comentario)}</div>
   <label class="ck"><input id="gfact" type="checkbox" ${g.factura?'checked':''}> Factura ya enviada al correo de la empresa</label>
@@ -505,6 +536,7 @@ function ajustarForm(){ const c = concepto($('#gc').value); $('#extras').innerHT
 function validarTope(){
   const c = concepto($('#gc').value), prev = $('#gcom')?.value || '';
   $('#avisoTope').innerHTML = avisoTopeHtml(c, $('#gv').value, $('#gn')?.value, prev);
+  avisoMedio();
 }
 function comprimir(file, max = 1400, q = 0.7){
   return new Promise((res, rej) => {
@@ -541,7 +573,10 @@ function guardarGasto(){
   const comentario = $('#gcom')?.value.trim() || '';
   if(tope && real > tope && !comentario) return toast('Escriba el motivo del sobrepresupuesto');
   const d = {id, fecha, concepto:c.id, valor, centro:$('#gcc').value, medio:$('#gm').value, empresa, personas, n_personas:nPersonas,
-    fuera: !!$('#gfuera')?.checked, factura: $('#gfact').checked, comentario, foto_path: path};
+    fuera: !!$('#gfuera')?.checked, factura: $('#gfact').checked, comentario, foto_path: path,
+    motivo_reembolso: $('#gm').value === 'propio' ? ($('#gmot')?.value || '') : '', reembolso_detalle: $('#gm').value === 'propio' ? ($('#gdet')?.value.trim() || '') : ''};
+  if(d.medio === 'propio' && !d.motivo_reembolso) return toast('Indique por qué pagó con dinero propio');
+  if(d.motivo_reembolso === 'otro' && !d.reembolso_detalle) return toast('Explique el motivo del reembolso');
   ejecutar(async () => {
     if(file){
       const blob = await comprimir(file);
@@ -605,14 +640,18 @@ function enviarPeriodo(){
   ejecutar(async () => { await rpc('enviar_periodo', {p_periodo: per}); await refrescar(yo().sinAutorizador ? 'Enviado a contabilidad. Avise por WhatsApp.' : 'Periodo enviado. Avise al autorizador por WhatsApp.'); });
 }
 function resumenSaldo(u, r){
+  if(!u) return '';
+  const gs = gastosDe(u.id, r.periodo), por = m => sum(gs.filter(g => g.medio === m));
+  let h = '';
   if(u.pago === 'anticipo' && r.diferencia != null){
-    if(r.diferencia > 0) return `<div class="alert">Anticipo ${money(r.anticipo)} · sobrante ${money(r.diferencia)} a devolver después del corte.</div>`;
-    if(r.diferencia < 0) return `<div class="alert">Anticipo ${money(r.anticipo)} · faltante ${money(-r.diferencia)} a depositar por contabilidad.</div>`;
-    return `<div class="alert ok">Anticipo ${money(r.anticipo)} · saldo en cero.</div>`;
+    if(r.diferencia > 0) h += `<div class="alert">Anticipo ${money(r.anticipo)} · sobrante ${money(r.diferencia)} a devolver después del corte.</div>`;
+    else if(r.diferencia < 0) h += `<div class="alert">Anticipo ${money(r.anticipo)} · faltante ${money(-r.diferencia)} a depositar por contabilidad.</div>`;
+    else h += `<div class="alert ok">Anticipo ${money(r.anticipo)} · saldo en cero.</div>`;
   }
-  if(u.pago === 'caja') return `<p class="muted">Reposición de caja: ${money(r.total)}.</p>`;
-  if(u.pago === 'tarjeta') return `<p class="muted">Pago de tarjeta: ${money(sum(gastosDe(u.id, r.periodo).filter(g => g.medio === 'tarjeta')))}.</p>`;
-  return '';
+  if(por('caja')) h += `<p class="muted">Reposición de caja: ${money(por('caja'))}.</p>`;
+  if(por('tarjeta')) h += `<p class="muted">Pago de tarjeta: ${money(por('tarjeta'))}.</p>`;
+  if(r.reembolso > 0) h += `<div class="alert ok">Reembolso a su favor (dinero propio): ${money(r.reembolso)}.</div>`;
+  return h;
 }
 
 /* ===== Anticipos ===== */
@@ -669,7 +708,7 @@ function vAutorizar(u){
           <td>${g.fecha}</td><td>${esc(c.nombre)}${g.corregido ? ' <span class="tag">corregido</span>' : ''}</td>
           <td class="num">${money(g.valor)}${c.porPersona ? `<br><span class="muted">${money(pp)} c/u</span>` : ''}</td><td>${thumb(g)}</td>
           <td class="muted">${[g.empresa && esc(g.empresa), g.personas && esc(g.personas) + ` (${g.nPersonas})`, c.comidaIndividual && g.fuera && 'fuera de ciudad/pernocta',
-            MEDIOS[g.medio], esc(g.centro), g.factura ? 'factura enviada' : 'sin factura', tope && pp > tope ? `<b style="color:var(--warn)">supera tope: ${esc(g.comentario)}</b>` : ''].filter(Boolean).join(' · ')}</td>
+            g.medio === 'propio' ? `<b style="color:var(--warn)">Reembolsable: ${esc(motivoTxt(g))}</b>` : MEDIOS[g.medio], esc(g.centro), g.factura ? 'factura enviada' : 'sin factura', tope && pp > tope ? `<b style="color:var(--warn)">supera tope: ${esc(g.comentario)}</b>` : ''].filter(Boolean).join(' · ')}</td>
           <td><input id="c-${g.id}" placeholder="Comentario"></td></tr>`; }).join('')}`)}
       <p>Por revisar: <b>${money(sum(rev))}</b></p>
       <div class="acciones">
@@ -729,11 +768,13 @@ function vContab(u){
     <p class="muted">Exporte primero (abajo): al finiquitar se borran las fotos y solo quedan montos y datos.</p>
     ${aut.length ? tabla(`<tr><th>Colaborador</th><th>Periodo</th><th>Pago</th><th class="num">Total</th><th>Liquidación</th><th></th></tr>
       ${aut.map(p => { const d = usuario(p.userId), gs = gastosDe(p.userId, p.periodo), t = sum(gs);
-        let liq = '';
-        if(d.pago === 'anticipo'){ const dep = sum(db.anticipos.filter(a => a.userId === d.id && a.estado === 'depositado'), a => a.monto), dif = dep - t;
-          liq = `Anticipo ${money(dep)} · ${dif > 0 ? `devuelve ${money(dif)}` : dif < 0 ? `depositar faltante ${money(-dif)}` : 'saldo cero'}`; }
-        else if(d.pago === 'caja') liq = `Reponer ${money(t)}`;
-        else liq = `Pago tarjeta ${money(sum(gs.filter(g => g.medio === 'tarjeta')))}${gs.some(g => g.medio === 'efectivo') ? ` · reembolsar efectivo ${money(sum(gs.filter(g => g.medio === 'efectivo')))}` : ''}`;
+        const por = m => sum(gs.filter(g => g.medio === m)), partes = [];
+        if(por('tarjeta')) partes.push(`Tarjeta ${money(por('tarjeta'))}`);
+        if(d.pago === 'anticipo'){ const dep = sum(db.anticipos.filter(a => a.userId === d.id && a.estado === 'depositado'), a => a.monto), dif = dep - por('anticipo');
+          partes.push(`Anticipo ${money(dep)}, usado ${money(por('anticipo'))}: ${dif > 0 ? `devuelve ${money(dif)}` : dif < 0 ? `depositar faltante ${money(-dif)}` : 'saldo cero'}`); }
+        if(por('caja')) partes.push(`Reponer caja ${money(por('caja'))}`);
+        if(por('propio')) partes.push(`<b>Reembolsar ${money(por('propio'))}</b>`);
+        const liq = partes.join(' · ') || '—';
         return `<tr><td>${esc(d.nombre)}</td><td>${mesNombre(p.periodo)}</td><td>${PAGOS[d.pago] || '—'}</td><td class="num">${money(t)}</td><td>${liq}${p.exportado ? '' : ' <span class="tag warn">sin exportar</span>'}</td>
           <td><button class="ghost sm" onclick="finiquitar('${p.userId}','${p.periodo}')">Finiquitar</button></td></tr>`; }).join('')}`) : '<p class="muted">Nada pendiente.</p>'}
   </div>
@@ -779,9 +820,9 @@ function depositar(id){
 function filasExport(p){ return db.gastos.filter(g => g.periodo === p && ['aprobado','pagado'].includes(g.estado)); }
 const nombreFoto = g => `fotos/${g.periodo}_${usuario(g.userId)?.login}_${g.fecha}_${g.id.slice(0,8)}.jpg`;
 function filasExcel(p){
-  const head = ['Periodo','Colaborador','Usuario','Puesto','Tipo de pago','Centro de costos','Fecha','Concepto','Valor','Medio de pago','Empresa/Cliente','Personas','N personas','Fuera de ciudad','Factura enviada','Comentario','Estado','Foto'];
+  const head = ['Periodo','Colaborador','Usuario','Puesto','Tipo de pago','Centro de costos','Fecha','Concepto','Valor','Medio de pago','Reembolsable','Motivo reembolso','Empresa/Cliente','Personas','N personas','Fuera de ciudad','Factura enviada','Comentario','Estado','Foto'];
   const rows = filasExport(p).map(g => { const u = usuario(g.userId) || {};
-    return [g.periodo, u.nombre, u.login, u.puesto, PAGOS[u.pago] || '', g.centro, g.fecha, nombreConcepto(g.concepto), Number(g.valor), MEDIOS[g.medio] || g.medio,
+    return [g.periodo, u.nombre, u.login, u.puesto, PAGOS[u.pago] || '', g.centro, g.fecha, nombreConcepto(g.concepto), Number(g.valor), MEDIOS[g.medio] || g.medio, g.medio === 'propio' ? 'Sí' : 'No', motivoTxt(g),
       g.empresa, g.personas, g.cliente ? Number(g.nPersonas) : '', g.fuera ? 'Sí' : '', g.factura ? 'Sí' : 'No', g.comentario, g.estado === 'pagado' ? 'finiquitado' : 'autorizado', g.fotoPath ? nombreFoto(g) : ''];
   });
   return [head, ...rows];
@@ -791,7 +832,7 @@ async function xlsxMes(p){
   const filas = filasExcel(p);
   const x = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
   const col = i => { let s = ''; i++; while(i){ const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
-  const anchos = [10,24,16,18,18,18,12,20,14,14,22,26,11,14,15,30,12,44];
+  const anchos = [10,24,16,18,18,18,12,20,14,16,13,30,22,26,11,14,15,30,12,44];
   const sheetRows = filas.map((r, ri) => `<row r="${ri+1}">` + r.map((v, ci) => {
     const ref = col(ci) + (ri + 1), st = ri === 0 ? ' s="1"' : (ci === 8 ? ' s="2"' : '');
     if(typeof v === 'number' && isFinite(v)) return `<c r="${ref}"${st}><v>${v}</v></c>`;
@@ -954,6 +995,8 @@ function vDashboard(u){
     ${pers.map(x => `<tr><td>${esc(x.nombre)}</td><td>${tagEstado(estadoPer(x.id, dper))}</td><td class="num">${money(sum(gs.filter(g => g.userId === x.id)))}</td></tr>`).join('')}`)}</div>
   <div class="card"><h2>Saldos de tarjeta</h2>${tarjetas.length ? tabla(`<tr><th>Persona</th><th class="num">Cupo</th><th class="num">Saldo</th></tr>
     ${tarjetas.map(x => `<tr><td>${esc(x.nombre)}</td><td class="num">${money(x.credito)}</td><td class="num">${money(saldoTarjeta(x))}</td></tr>`).join('')}`) : '<p class="muted">Ninguna</p>'}</div>
+  <div class="card"><h2>Reembolsos pendientes (dinero propio)</h2>${(() => { const conR = activos().filter(x => reembolsoPendiente(x) > 0);
+    return conR.length ? tabla(`<tr><th>Persona</th><th class="num">Por reembolsar</th></tr>${conR.map(x => `<tr><td>${esc(x.nombre)}</td><td class="num">${money(reembolsoPendiente(x))}</td></tr>`).join('')}`) : '<p class="muted">Ninguno</p>'; })()}</div>
   <div class="card"><h2>Anticipos pendientes</h2>${ants.length ? tabla(`<tr><th>Persona</th><th class="num">Monto</th><th>Estado</th><th>Desde</th></tr>
     ${ants.map(a => `<tr><td>${esc(usuario(a.userId)?.nombre)}</td><td class="num">${money(a.monto)}</td><td>${tagEstado(a.estado)}</td><td>${a.fecha}</td></tr>`).join('')}`) : '<p class="muted">Ninguno</p>'}</div>
   <div class="card"><h2>Cajas menores</h2>${cajas.length ? tabla(`<tr><th>Caja</th><th>Encargado</th><th class="num">Monto fijo</th><th class="num">Disponible</th></tr>

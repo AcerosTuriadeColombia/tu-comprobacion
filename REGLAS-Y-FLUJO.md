@@ -1,6 +1,6 @@
 # TU comprobación — Reglas, condiciones y flujo de trabajo
 
-Versión 0.5 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
+Versión 0.6 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
 
 ## 1. Roles
 
@@ -51,7 +51,13 @@ Conceptos: Desayuno, Almuerzo, Comida con cliente, Café con cliente, Peaje, Com
 - Se adjunta la imagen del ticket y se captura el valor total.
 - La app lee fecha y valor de la imagen como sugerencia; la persona confirma antes de guardar. (Pendiente; por ahora se capturan a mano.)
 - Casilla "factura enviada al correo de la empresa".
-- Pagos en efectivo permitidos cuando el lugar no acepta tarjeta (peajes, parqueaderos y similares). Se marca el medio de pago por gasto.
+- Cada gasto indica con qué se pagó (quién puso la plata):
+  - **Tarjeta de crédito de la empresa** (usuarios con tarjeta): se descuenta del cupo; contabilidad lo cruza con el extracto.
+  - **Anticipo** (usuarios con anticipo): se descuenta del anticipo depositado.
+  - **Caja menor** (cajas menores): se repone a la caja.
+  - **Dinero propio – reembolsable** (todos): la persona pagó de su bolsillo y se le reembolsa al finiquitar. Pide el motivo: no aceptan tarjeta, cupo de tarjeta agotado, anticipo agotado u otro (con explicación).
+- Si el valor supera el saldo de la tarjeta o lo que queda del anticipo, la app avisa y sugiere marcarlo como dinero propio.
+- Quien autoriza ve los reembolsables marcados con su motivo. Al finiquitar, contabilidad ve la liquidación separada: pago de tarjeta, uso del anticipo (y lo que se devuelve o se deposita), reposición de caja y reembolso a la persona. El Excel trae las columnas "Reembolsable" y "Motivo reembolso".
 - Las cajas menores llevan foto por cada gasto.
 
 ## 6. Ciclo mensual (periodo)
