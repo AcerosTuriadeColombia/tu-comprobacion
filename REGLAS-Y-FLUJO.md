@@ -34,7 +34,7 @@ Contabilidad da de alta a todos los usuarios. Cada usuario tiene: nombre, puesto
 
 ## 4. Conceptos y reglas de gasto
 
-Conceptos: Desayuno, Almuerzo, Comida con cliente, Café con cliente, Peaje, Combustible, Parqueadero, Obsequio, Hospedaje.
+Conceptos: Desayuno, Almuerzo, Comida con cliente, Café con cliente, Peaje, Combustible, Parqueadero, Taxis/Buses, Vuelo, Obsequio, Hospedaje.
 
 - Comida con cliente y café con cliente: casilla "con cliente", empresa y nombres de las personas. Presupuesto por persona.
 - Obsequio: nombre del cliente obligatorio.
