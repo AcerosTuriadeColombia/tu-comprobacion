@@ -1,6 +1,6 @@
 # TU comprobación — Reglas, condiciones y flujo de trabajo
 
-Versión 0.4 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
+Versión 0.5 · Aceros Turia de Colombia S.A.S. · Pendiente de revisión antes de publicar
 
 ## 1. Roles
 
@@ -62,22 +62,22 @@ Conceptos: Desayuno, Almuerzo, Comida con cliente, Café con cliente, Peaje, Com
 4. **Autorizado.** Todos los gastos aprobados. Pasa a contabilidad.
 5. **Finiquitado.** Contabilidad cierra el periodo y registra el pago de la tarjeta, o confirma el depósito/devolución del anticipo.
 
-Cada gasto pertenece al mes de la fecha de su ticket. La persona elige el periodo (mes) en la app; al inicio de mes la app abre por defecto el mes anterior si tiene gastos sin enviar.
+**Corte el día 28.** Cada periodo va del 29 del mes anterior al 28 del mes y lleva el nombre de ese mes (ej.: diciembre = 29 nov – 28 dic). El día 28 se envía la comprobación. Cada gasto cae en el periodo que le corresponde por la fecha de su ticket (un gasto del 30 de noviembre cuenta para diciembre). Transición: hasta octubre de 2026 los periodos fueron el mes calendario; noviembre de 2026 va del 1 al 28 de noviembre.
 
 Al reenviar un periodo devuelto, solo se revisan los gastos corregidos; los ya aprobados no se tocan.
 
-Plazo de radicación: los primeros 5 días del mes. La app avisa cuando se acerca la fecha y muestra periodos pendientes.
+La app avisa desde 3 días antes del corte, el mismo día 28 y cuando un periodo quedó sin enviar (vencido). Contabilidad ve quién tiene periodos vencidos y puede recordarle por WhatsApp. La app avisa cuando se acerca la fecha y muestra periodos pendientes.
 
 ## 7. Tipos de pago
 
-**Tarjeta de crédito.** El comercial comprueba sus gastos del mes anterior los primeros 5 días del mes si tuvo gastos. Cada gasto descuenta del saldo de la tarjeta. Contabilidad registra el pago y el saldo se actualiza.
+**Tarjeta de crédito.** El comercial envía su comprobación el día 28 de cada mes si tuvo gastos. Cada gasto descuenta del saldo de la tarjeta. Contabilidad registra el pago y el saldo se actualiza.
 
 **Anticipo.**
 - El vendedor solicita el monto (con motivo). Se notifica a contabilidad por WhatsApp.
 - El jefe directo autoriza.
 - Contabilidad deposita y confirma en la app.
 - Si el anticipo anterior no está comprobado, no se puede solicitar otro.
-- Al comprobar: si sobra, se devuelve los primeros días del mes; si falta, se deposita el faltante (solo si está autorizado).
+- Al comprobar: si sobra, se devuelve después del corte; si falta, se deposita el faltante (solo si está autorizado).
 
 **Caja menor.** El encargado registra cada gasto con foto. Debe mantener el monto fijo; lo que se gasta se repone con comprobación.
 

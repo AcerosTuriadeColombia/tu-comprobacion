@@ -97,7 +97,8 @@ const ESTADO_ANT = {solicitado:'solicitado', autorizado:'autorizado por jefe', r
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const ACT = 'tuc_act';
 const INACTIVIDAD = 30*60*1000;   // 30 minutos
-const DIA_LIMITE = 5;             // radicación: primeros 5 días del mes
+const CORTE = 28;                 // corte de cada periodo: el día 28 se envía la comprobación
+const CAMBIO_CORTE = '2026-10-31'; // hasta esta fecha los periodos eran el mes calendario
 const DIAS_CLAVE = 90;            // cambio de contraseña cada 90 días
 
 /* ===== Utilidades ===== */
@@ -105,7 +106,17 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => '$ ' + Math.round(Number(n||0)).toLocaleString('es-CO');
 const hoy = () => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Bogota'}).format(new Date());
-const mesActual = () => hoy().slice(0,7);
+// Periodo 'AAAA-MM' = del 29 del mes anterior al 28 del mes (antes de nov-2026: mes calendario).
+function mesSiguiente(p){ let [y,m] = p.split('-').map(Number); m++; if(m > 12){ m = 1; y++; } return `${y}-${String(m).padStart(2,'0')}`; }
+function periodoDe(f){ return (f <= CAMBIO_CORTE || Number(f.slice(8,10)) <= CORTE) ? f.slice(0,7) : mesSiguiente(f.slice(0,7)); }
+function inicioPer(p){
+  if(p <= CAMBIO_CORTE.slice(0,7) || p === mesSiguiente(CAMBIO_CORTE.slice(0,7))) return p + '-01';
+  const [y,m] = p.split('-').map(Number); return new Date(Date.UTC(y, m - 2, CORTE + 1)).toISOString().slice(0,10);
+}
+function finPer(p){ return p <= CAMBIO_CORTE.slice(0,7) ? ultimoDia(p) : `${p}-${CORTE}`; }
+const fechaCorta = f => `${Number(f.slice(8,10))} ${MESES[Number(f.slice(5,7)) - 1].slice(0,3)}`;
+const rangoPer = p => `${fechaCorta(inicioPer(p))} – ${fechaCorta(finPer(p))}`;
+const mesActual = () => periodoDe(hoy());
 function mesAnterior(p = mesActual(), n = 1){ let [y,m] = p.split('-').map(Number); m -= n; while(m < 1){ m += 12; y--; } return `${y}-${String(m).padStart(2,'0')}`; }
 function mesNombre(p){ const [y,m] = p.split('-').map(Number); return `${MESES[m-1]} ${y}`; }
 function ultimoDia(p){ const [y,m] = p.split('-').map(Number); return `${p}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`; }
@@ -214,7 +225,7 @@ function periodosDe(u){
 }
 function selectorPeriodo(u){
   return `<label>Periodo</label><select onchange="per=this.value;editId=null;nuevoGastoId=null;render()">${periodosDe(u).map(p =>
-    `<option value="${p}" ${p===per?'selected':''}>${mesNombre(p)} · ${ESTADO_PER[estadoPer(u.id,p)]}</option>`).join('')}</select>`;
+    `<option value="${p}" ${p===per?'selected':''}>${mesNombre(p)} (${rangoPer(p)}) · ${ESTADO_PER[estadoPer(u.id,p)]}</option>`).join('')}</select>`;
 }
 
 /* ===== Sesión e inactividad ===== */
@@ -366,12 +377,15 @@ function vInicio(u){
     if(u.pago === 'caja') h += `<p>Disponible en caja: <b>${money(disponibleCaja(u))}</b> de ${money(u.montoCaja)}</p>
       <p class="muted">Encargado: ${esc(u.encargado || 'por definir')}. Lo gastado se repone al finiquitar la comprobación.</p>`;
     if(u.pago === 'anticipo'){ const a = anticipoAbierto(u); h += a ? `<p>Anticipo vigente: <b>${money(a.monto)}</b> ${tagEstado(a.estado)}</p>` : `<p class="muted">Sin anticipo vigente.</p>`; }
-    const ant = mesAnterior(), eAnt = estadoPer(u.id, ant), nAnt = gastosDe(u.id, ant).length, dia = Number(hoy().slice(8));
+    const ant = mesAnterior(), eAnt = estadoPer(u.id, ant), nAnt = gastosDe(u.id, ant).length;
     if(eAnt === 'abierto' && nAnt){
-      h += dia <= DIA_LIMITE
-        ? `<div class="alert">Radique la comprobación de <b>${mesNombre(ant)}</b> antes del día ${DIA_LIMITE}. Tiene ${nAnt} gasto(s) sin enviar.</div>`
-        : `<div class="alert bad">La comprobación de <b>${mesNombre(ant)}</b> está vencida (plazo: día ${DIA_LIMITE}). Envíela cuanto antes.</div>`;
-      h += `<button class="primary" onclick="ir('enviar');per='${ant}';render()">Enviar ${mesNombre(ant)}</button>`;
+      h += `<div class="alert bad">La comprobación de <b>${mesNombre(ant)}</b> (${rangoPer(ant)}) está vencida: el corte fue el día ${CORTE}. Envíela cuanto antes.</div>
+        <button class="primary" onclick="ir('enviar');per='${ant}';render()">Enviar ${mesNombre(ant)}</button>`;
+    }
+    const act = mesActual(), faltan = Math.round((new Date(finPer(act) + 'T00:00:00') - new Date(hoy() + 'T00:00:00')) / 86400000);
+    if(estadoPer(u.id, act) === 'abierto' && gastosDe(u.id, act).length && faltan <= 3){
+      h += `<div class="alert">${faltan === 0 ? '<b>Hoy es el corte.</b>' : `El corte es en ${faltan} día(s), el ${fechaCorta(finPer(act))}.`} Envíe su comprobación de <b>${mesNombre(act)}</b>.</div>
+        <button class="primary" onclick="ir('enviar');per='${act}';render()">Enviar ${mesNombre(act)}</button>`;
     }
     db.periodos.filter(p => p.userId === u.id && p.estado === 'devuelto').forEach(p => {
       h += `<div class="alert bad">Tiene gastos devueltos en <b>${mesNombre(p.periodo)}</b>. Corríjalos y reenvíe.
@@ -380,7 +394,7 @@ function vInicio(u){
     if(!usuario(u.autoriza) && !u.sinAutorizador) h += `<div class="alert">No tiene autorizador asignado. Pida a contabilidad que lo defina en la matriz de usuarios.</div>`;
     const p = mesActual(), mis = gastosDe(u.id, p);
     h += `<h3>${mesNombre(p)} ${tagEstado(estadoPer(u.id, p))}</h3><p class="total">${money(sum(mis))}</p>
-      <p class="muted">${mis.length} gasto(s) registrados · radicación en los primeros ${DIA_LIMITE} días del mes siguiente.</p>
+      <p class="muted">${mis.length} gasto(s) registrados · periodo del ${rangoPer(p)} · se envía el día ${CORTE}.</p>
       <div class="acciones"><button class="primary" onclick="ir('gastos');per='${p}';render()">Registrar gasto</button></div>`;
   }
   h += '</div>';
@@ -445,12 +459,12 @@ function opcionesMedio(u){
 }
 function formGasto(u, g){
   g = g || {};
-  const max = hoy() < ultimoDia(per) ? hoy() : ultimoDia(per);
+  const max = hoy() < finPer(per) ? hoy() : finPer(per);
   const fecha = g.fecha || (per === mesActual() ? hoy() : max);
   const c = concepto(g.concepto || CONCEPTOS[0].id);
   return `
   <div class="row">
-    <div><label>Fecha del ticket</label><input id="gf" type="date" value="${fecha}" min="${per}-01" max="${max}"></div>
+    <div><label>Fecha del ticket</label><input id="gf" type="date" value="${fecha}" min="${inicioPer(per)}" max="${max}"></div>
     <div><label>Concepto</label>
       <select id="gc" onchange="ajustarForm()">${CONCEPTOS.map(x => `<option value="${x.id}" ${x.id===c.id?'selected':''}>${x.nombre}</option>`).join('')}</select></div>
   </div>
@@ -509,7 +523,7 @@ function guardarGasto(){
   const fecha = $('#gf').value;
   if(!fecha) return toast('Ingrese la fecha del ticket');
   if(fecha > hoy()) return toast('La fecha no puede ser futura');
-  if(fecha.slice(0,7) !== per) return toast(`La fecha debe estar dentro de ${mesNombre(per)}`);
+  if(periodoDe(fecha) !== per) return toast(`La fecha debe estar entre el ${rangoPer(per)} (periodo ${mesNombre(per)}). Para otra fecha cambie el periodo arriba.`);
   const valor = Number($('#gv').value || 0);
   if(!(valor > 0)) return toast('Ingrese el valor');
   const id = edit ? edit.id : (nuevoGastoId = nuevoGastoId || uuid());
@@ -585,12 +599,12 @@ function vEnviar(u){
   return h + '</div>';
 }
 function enviarPeriodo(){
-  if(per === mesActual() && !confirm(`${mesNombre(per)} aún no termina. Normalmente se envía al cerrar el mes. ¿Enviar de todas formas?`)) return;
+  if(per === mesActual() && hoy() < finPer(per) && !confirm(`El periodo ${mesNombre(per)} cierra el ${fechaCorta(finPer(per))}. Los gastos que tenga después de enviar quedarán para el siguiente periodo. ¿Enviar de todas formas?`)) return;
   ejecutar(async () => { await rpc('enviar_periodo', {p_periodo: per}); await refrescar(yo().sinAutorizador ? 'Enviado a contabilidad. Avise por WhatsApp.' : 'Periodo enviado. Avise al autorizador por WhatsApp.'); });
 }
 function resumenSaldo(u, r){
   if(u.pago === 'anticipo' && r.diferencia != null){
-    if(r.diferencia > 0) return `<div class="alert">Anticipo ${money(r.anticipo)} · sobrante ${money(r.diferencia)} a devolver en los primeros días del mes.</div>`;
+    if(r.diferencia > 0) return `<div class="alert">Anticipo ${money(r.anticipo)} · sobrante ${money(r.diferencia)} a devolver después del corte.</div>`;
     if(r.diferencia < 0) return `<div class="alert">Anticipo ${money(r.anticipo)} · faltante ${money(-r.diferencia)} a depositar por contabilidad.</div>`;
     return `<div class="alert ok">Anticipo ${money(r.anticipo)} · saldo en cero.</div>`;
   }
@@ -722,8 +736,8 @@ function vContab(u){
           <td><button class="ghost sm" onclick="finiquitar('${p.userId}','${p.periodo}')">Finiquitar</button></td></tr>`; }).join('')}`) : '<p class="muted">Nada pendiente.</p>'}
   </div>
   <div class="card"><h2>Exportar periodo</h2>
-    ${meses.length ? `<div class="row"><div><label>Mes</label><select id="xm">${meses.map(m => `<option value="${m}">${mesNombre(m)}</option>`).join('')}</select></div><div></div></div>
-      <p class="muted">Incluye los gastos autorizados y finiquitados del mes. El ZIP trae el Excel y las fotos.</p>
+    ${meses.length ? `<div class="row"><div><label>Mes</label><select id="xm">${meses.map(m => `<option value="${m}">${mesNombre(m)} (${rangoPer(m)})</option>`).join('')}</select></div><div></div></div>
+      <p class="muted">Incluye los gastos autorizados y finiquitados del periodo. El ZIP trae el Excel y las fotos.</p>
       <div class="acciones"><button class="primary" onclick="exportarZIP($('#xm').value)">Descargar ZIP con fotos</button><button class="ghost" onclick="exportarExcel($('#xm').value)">Solo Excel</button></div>`
       : '<p class="muted">Aún no hay periodos autorizados.</p>'}
   </div>
@@ -734,8 +748,8 @@ function vContab(u){
     ${espera.length ? `<p class="muted">Esperando autorización del jefe: ${espera.map(a => `${esc(usuario(a.userId).nombre)} (${money(a.monto)})`).join(', ')}</p>` : ''}
   </div>
   <div class="card"><h2>Pendientes de radicar · ${mesNombre(ant)}</h2>
-    ${sinRadicar.length ? `<p>${dia > DIA_LIMITE ? '<span class="tag bad">vencido</span> ' : ''}${sinRadicar.map(x => esc(x.nombre)).join(', ')}</p>
-      ${sinRadicar.map(x => btnWa('recordar a ' + x.nombre, x.telefono, `Recordatorio: envíe su comprobación de ${mesNombre(ant)} en TU comprobación (plazo: día ${DIA_LIMITE}).`)).join('')}`
+    ${sinRadicar.length ? `<p><span class="tag bad">vencido</span> ${sinRadicar.map(x => esc(x.nombre)).join(', ')}</p>
+      ${sinRadicar.map(x => btnWa('recordar a ' + x.nombre, x.telefono, `Recordatorio: envíe su comprobación de ${mesNombre(ant)} (${rangoPer(ant)}) en TU comprobación. El corte fue el día ${CORTE}.`)).join('')}`
       : '<p class="muted">Todos al día.</p>'}
   </div>
   <div class="card"><h2>Finiquitados recientes</h2>
@@ -930,7 +944,7 @@ function vDashboard(u){
   const ants = db.anticipos.filter(a => !['comprobado','rechazado'].includes(a.estado));
   const pers = activos().filter(puedeComprobar);
   return `
-  <div class="card"><label>Mes</label><select onchange="dper=this.value;render()">${meses.map(m => `<option value="${m}" ${m===dper?'selected':''}>${mesNombre(m)}</option>`).join('')}</select>
+  <div class="card"><label>Mes</label><select onchange="dper=this.value;render()">${meses.map(m => `<option value="${m}" ${m===dper?'selected':''}>${mesNombre(m)} (${rangoPer(m)})</option>`).join('')}</select>
     <p class="total" style="margin:12px 0 0">${money(sum(gs))}</p><p class="muted">${gs.length} gasto(s) registrados en ${mesNombre(dper)} (todos los estados)</p></div>
   <div class="card"><h2>Por concepto</h2>${barras(agrupar(g => nombreConcepto(g.concepto)))}</div>
   <div class="card"><h2>Por planta / centro de costos</h2>${barras(agrupar(g => g.centro))}</div>
